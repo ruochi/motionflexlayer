@@ -1,0 +1,6 @@
+export const BG = '#07080d'
+export const INK = '#f4f1ea'
+export const MUTED = '#8d97a8'
+export const AMBER = '#ffb547'
+export const CORAL = '#ff5d73'
+export const CYAN = '#4fd1ff'

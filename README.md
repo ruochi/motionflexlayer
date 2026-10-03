@@ -1,5 +1,98 @@
 # motionflexlayer
 
-The motion counterpart of [flexlayer](https://github.com/ruochi/flexlayer).
+在 [flexlayer](https://github.com/ruochi/flexlayer) 之上做动画的框架。
 
-Work in progress.
+一帧画面是时间 `t` 的纯函数，返回一棵 flexlayer 节点树：文字和布局交给 flexlayer 排版，粒子、光效这类图形交给 `draw` 画，动效、时间轴、渲染和音频交给 motionflexlayer。画面和声音共用一条节拍时间轴，所以音画天然对齐。
+
+```ts
+import { defineComposition, place, pulse, spring, text, timeline } from 'motionflexlayer'
+
+const tl = timeline({ bpm: 120, duration: 6 }).cue('kick', [0.5, 1, 1.5, 2])
+
+export default defineComposition({
+  id: 'demo', width: 1920, height: 1080, fps: 60, duration: 6,
+  background: '#0b0d12', color: '#f2efe8', timeline: tl,
+  render: (f) => {
+    const e = spring(f.t - 0.3)
+    const k = pulse(f.t, tl.times('kick'))
+    return place({ x: 960, y: 540 + (1 - e) * 60, scale: 1 + 0.04 * k }, text('motion flexlayer', { fontSize: 120, fontWeight: 800 }))
+  },
+  audio: ({ tl }) => ({ clips: tl.times('kick').map((at) => ({ src: './kick.wav', at })) }),
+})
+```
+
+## 给模型看的入口
+
+让模型做动画时，先让它读 **[MOTION.md](MOTION.md)**。里面写了心智模型、硬规则、四步工作流（时间轴 → 帧函数 → 音频 → 验证）、API 速查和动效基本功。
+
+其余文档：
+
+- [docs/RECIPES.md](docs/RECIPES.md)：动效配方，包括入场、冲击、文字、镜头、计数器、粒子、3D、质感；
+- [docs/AUDIO.md](docs/AUDIO.md)：音轨、母线、闪避，以及看不到、听不到声音时怎么检查；
+- [docs/REACT.md](docs/REACT.md)：React 写法；
+- [docs/FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)：需要 flexlayer 配合的改动。
+
+## 安装
+
+现在依赖本地的 flexlayer（`file:../flexlayer`），两个仓库要放在同一级目录下：
+
+```bash
+git clone https://github.com/ruochi/flexlayer
+git clone https://github.com/ruochi/motionflexlayer
+(cd flexlayer && npm i && npm run build)
+cd motionflexlayer && npm i
+npm run assets          # 生成示例用的音频文件
+```
+
+需要 ffmpeg。程序按以下顺序查找：
+
+1. 环境变量 `MFL_FFMPEG` 或 `FFMPEG_PATH`；
+2. 可选依赖 `ffmpeg-static`；
+3. `PATH` 里的 `ffmpeg`。
+
+用 React 写法时，再装 `react@^19.3` 和 `react-reconciler@^0.34`。
+
+## 命令
+
+```bash
+npm run mfl -- stills examples/hello/index.ts            # 均匀取 12 帧，生成联系表
+npm run mfl -- stills examples/hello/index.ts 2.1 4.05   # 指定时刻
+npm run mfl -- check  examples/hello/index.ts            # 逐帧排版检查，汇总问题
+npm run mfl -- audio  examples/hello/index.ts            # WAV、波形图、电平报告
+npm run mfl -- render examples/hello/index.ts            # 多进程渲染 mp4，带音轨
+npm run mfl -- render examples/hello/index.ts --scale 0.5 --fps 30 --from 2 --to 6   # 草稿
+npm run mfl -- cues   examples/hello/index.ts            # 导出时间轴 JSON
+```
+
+输出在 `out/<id>/` 下。
+
+## 示例
+
+| 示例 | 内容 |
+| --- | --- |
+| [examples/hello](examples/hello/index.ts) | 10 秒，核心写法的最小完整示例：逐字弹簧标题、蒙版擦除、节拍计数器、打字机、冲击震屏，配 BGM 和音效 |
+| [examples/hello-react](examples/hello-react/index.tsx) | 6 秒，React 写法：柱状图逐根长出、数字滚动、状态标签 |
+| [examples/showreel](examples/showreel/index.ts) | 48 秒、六段的参考片：几何、粒子、版式、3D 点云、落款。整首配乐用代码合成 |
+| [examples/synth](examples/synth/index.ts) | 程序化合成器套件，showreel 的配乐用的就是它 |
+
+## 目录
+
+```
+src/
+  math.ts ease.ts motion.ts random.ts color.ts   时间、缓动、弹簧、噪声、颜色
+  timeline.ts                                   节拍、段落、cue
+  composition.ts                                defineComposition、帧、加载
+  nodes.ts drawkit.ts canvas.ts                 动效原语（镜头、滚动、擦除、打字）、draw 工具
+  render/                                       静帧、联系表、多进程视频、问题汇总
+  audio/                                        解码、混音、闪避、限幅、WAV、报告、波形
+  react/                                        React 适配
+  cli.ts
+```
+
+## 现状
+
+- 版本 0.1，接口可能还会变。
+- 核心写法和 React 写法可用；Vue 计划放在 v2，设计见 [REACT.md](docs/REACT.md#vuev2-计划)。
+- 依赖本地 flexlayer，暂时没有发布到 npm，原因见 [FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md) 第 1 项。
+- `render` 用了一个临时垫片，跳过 flexlayer 的 PNG 编码，全片快约 3 倍。flexlayer 支持原始像素输出后删除，见第 8 项。
+- 音频是按电平报告和波形检查的，没有人工试听过。

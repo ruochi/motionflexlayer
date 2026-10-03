@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "jsx": "react-jsx",
+    "jsxImportSource": "motionflexlayer/react",
+    "baseUrl": ".",
+    "paths": {
+      "motionflexlayer": ["./src/index.ts"],
+      "motionflexlayer/react": ["./src/react/index.ts"],
+      "motionflexlayer/react/jsx-runtime": ["./src/react/jsx-runtime.ts"],
+      "motionflexlayer/react/jsx-dev-runtime": ["./src/react/jsx-dev-runtime.ts"]
+    }
+  },
+  "include": ["src", "examples", "test"]
+}

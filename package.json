@@ -1,16 +1,67 @@
 {
   "name": "motionflexlayer",
-  "version": "0.0.1",
-  "description": "Motion counterpart of flexlayer",
+  "version": "0.1.0",
+  "description": "Motion Flex Layer：在 flexlayer 之上做动画。时间轴、节拍、动效原语、并行渲染、音轨混音，核心与 React 两种写法",
+  "type": "module",
   "main": "dist/index.js",
-  "scripts": {
-    "start": "tsx src/index.ts"
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js"
+    },
+    "./react/jsx-runtime": {
+      "types": "./dist/react/jsx-runtime.d.ts",
+      "import": "./dist/react/jsx-runtime.js"
+    },
+    "./react/jsx-dev-runtime": {
+      "types": "./dist/react/jsx-dev-runtime.d.ts",
+      "import": "./dist/react/jsx-dev-runtime.js"
+    }
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "bin": {
+    "motionflexlayer": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "MOTION.md",
+    "docs"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "mfl": "tsx src/cli.ts",
+    "assets": "tsx examples/assets/make-assets.ts"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@dc/flexlayer": "file:../flexlayer",
+    "tsx": "^4.19.2"
+  },
+  "peerDependencies": {
+    "react": "^19.3.0",
+    "react-reconciler": "^0.34.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-reconciler": {
+      "optional": true
+    }
+  },
   "devDependencies": {
-    "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
+    "@types/node": "^20.19.43",
+    "@types/react": "^19.2.0",
+    "@types/react-reconciler": "^0.32.0",
+    "react": "^19.3.0",
+    "react-reconciler": "^0.34.0",
+    "typescript": "~5.6.3",
+    "vitest": "^2.1.9"
   }
 }
