@@ -2,15 +2,25 @@
   "name": "motionflexlayer",
   "version": "0.0.1",
   "description": "Motion counterpart of flexlayer",
-  "main": "dist/index.js",
-  "scripts": {
-    "start": "tsx src/index.ts"
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./jsx-runtime": "./src/jsx-runtime.ts",
+    "./jsx-dev-runtime": "./src/jsx-runtime.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "postinstall": "node scripts/build-flexlayer.mjs",
+    "showreel": "tsx showreel/render.tsx",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@dc/flexlayer": "github:ruochi/flexlayer#de14a118407709b8302ef9ffc0ba510733d5f165"
+  },
   "devDependencies": {
+    "@types/node": "^20.19.43",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
+    "typescript": "~5.4.2"
   }
 }
