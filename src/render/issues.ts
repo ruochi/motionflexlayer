@@ -7,14 +7,22 @@ export type IssueStat = {
   path: string
   message: string
   hint?: string
+  /** unused-expect 才有：没对上的问题码。 */
+  expect?: { code: string }
   frames: number
   first: number
   last: number
 }
 
+const keyOf = (s: { level: string; code: string; path: string; expect?: { code: string } }) =>
+  `${s.level}\u0000${s.code}\u0000${s.path}\u0000${s.expect?.code ?? ''}`
+
 /**
  * 跨帧汇总 flexlayer 的报告。同一个 (level, code, path) 合并成一条，记下出现了几帧、首末时间。
  * 海报只有一帧，视频是几千帧，逐帧打印没法看。
+ *
+ * 和 flexlayer 的多帧检查一致：一句 expect 只要有一帧对上了，别的帧里的 unused-expect 不再报。
+ * 只在某几秒里故意越界、叠字的元素，可以一直挂着 expect。
  */
 export class IssueLog {
   private readonly map = new Map<string, IssueStat>()
@@ -26,14 +34,24 @@ export class IssueLog {
     this.frames++
     for (const issue of report.issues) {
       if (this.lint.ignore?.includes(issue.code)) continue
-      const key = `${issue.level}\u0000${issue.code}\u0000${issue.path}`
+      const key = keyOf(issue)
       const s = this.map.get(key)
       if (s) {
         s.frames++
         s.first = Math.min(s.first, t)
         s.last = Math.max(s.last, t)
       } else {
-        this.map.set(key, { ...issue, frames: 1, first: t, last: t })
+        this.map.set(key, {
+          level: issue.level,
+          code: issue.code,
+          path: issue.path,
+          message: issue.message,
+          hint: issue.hint,
+          expect: issue.expect,
+          frames: 1,
+          first: t,
+          last: t,
+        })
       }
     }
   }
@@ -41,7 +59,7 @@ export class IssueLog {
   merge(stats: IssueStat[], frames: number): void {
     this.frames += frames
     for (const s of stats) {
-      const key = `${s.level}\u0000${s.code}\u0000${s.path}`
+      const key = keyOf(s)
       const cur = this.map.get(key)
       if (cur) {
         cur.frames += s.frames
@@ -53,7 +71,12 @@ export class IssueLog {
 
   get stats(): IssueStat[] {
     const rank = { error: 0, warn: 1, info: 2 } as const
-    return [...this.map.values()].sort((a, b) => rank[a.level] - rank[b.level] || b.frames - a.frames)
+    const all = [...this.map.values()]
+    const used = (s: IssueStat) =>
+      all.some((o) => o.code === s.expect?.code && (o.path === s.path || o.path.startsWith(`${s.path}/`)))
+    return all
+      .filter((s) => s.code !== 'unused-expect' || !used(s))
+      .sort((a, b) => rank[a.level] - rank[b.level] || b.frames - a.frames)
   }
 
   get errorCount(): number {
