@@ -4,7 +4,7 @@
 
 motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做法。改完一项，motionflexlayer 删一段绕路代码。
 
-**状态核对于 flexlayer 0.2.18（c77b413）。** 第 1、8 项已完成，motionflexlayer 0.2 已删掉对应的绕路代码；第 4 项部分完成。另外 flexlayer 新增的 `expect`、`data`、行内元素进报告、`flex-wrap`、`anchor-box="ink"` 都已在 motionflexlayer 里用上。
+**状态核对于 flexlayer 0.2.20（4c6432a）。** 第 1、5、8 项已完成，motionflexlayer 已删掉对应的绕路代码；第 4 项部分完成。另外 flexlayer 新增的 `expect`、`data`、行内元素进报告、`flex-wrap`、`anchor-box="ink"`、`glyph()`、`canvas.create()` 的逐字位置、`ink-stroke`、`glass`、`extrude` 都已在示例里用上（`examples/ink`）。第 15–17 项是做 ink 示例时发现的。
 
 | # | 优先级 | 改动 | 状态 | motionflexlayer 里受影响的代码 |
 | --- | --- | --- | --- | --- |
@@ -12,7 +12,7 @@ motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做
 | 2 | P0 | 导出字体与 canvas | 未做 | `src/canvas.ts` 整个文件 |
 | 3 | P0 | `draw` 的 ctx 类型补全 | 未做 | `src/render/stills.ts` 里 `drawImage` 的强转 |
 | 4 | P1 | 动画用的检查配置：`bleed`、视频字号阈值 | 部分：根上 `bleed`、元素上 `expect` 已有；嵌套 layer 的 `bleed`、视频字号阈值没有 | 示例里的 `lint.ignore: ['min-font-size']` |
-| 5 | P1 | `origin` 支持任意点 | 未做 | `src/nodes.ts` 的 `camera()` |
+| 5 | P1 | `origin` 支持任意点 | ✅ 已完成（0.2.19） | `camera()` 已改成一层 layer |
 | 6 | P1 | 离屏画布按可见区域裁剪 | 未核实 | `MOTION.md` 里“镜头里别放 blur / mask”这条规则 |
 | 7 | P1 | 行内 `span` 的变换与透明度 | 未做（文字整段可以 `style="scale:…"`） | `src/drawkit.ts` 的 `drawGlyphs` |
 | 8 | P0 | 原始像素输出 | ✅ 已完成：`renderFrames({ format: 'rgba' })` | `src/render/raw.ts` 已删除 |
@@ -22,6 +22,9 @@ motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做
 | 12 | P2 | 层效果：`bloom`、`chroma` | 未做 | 示例里在 draw 里手画的光晕 |
 | 13 | P1 | 单帧取原始像素、异步帧函数 | 新增 | `src/render/frame.ts` 的 `renderRgba` |
 | 14 | P2 | `renderFrames` 的 `t` 由调用方给 | 新增 | 无 |
+| 15 | P0 | 中文折行：句读落到行首 | 新增（缺陷） | `examples/ink/type.ts` 的 `headsOk`，以及换宽度时跳过坏宽度 |
+| 16 | P1 | 合并子树墨迹时进 `g` | 新增（缺陷） | `examples/ink/kit.ts` 的 `glyphAt` 每字一层 layer |
+| 17 | P2 | `canvas.create` 的字带上原文位置；竖排按列给 | 新增 | `examples/ink/page.ts` 的 `cells()`、`type.ts` 按 `x` 分列 |
 
 ---
 
@@ -109,30 +112,11 @@ renderFvg(node, { t, profile: 'video' })
 
 **验收。** hello、showreel 两个示例在 `profile: 'video'` 下逐帧检查，不出 error；故意放一行 12px 的字，仍然会报 `min-font-size`。
 
-## 5. `origin` 支持任意点（P1）
+## 5. `origin` 支持任意点（P1，✅ 已完成）
 
-**问题。** `origin` 只有九宫格。绕任意点缩放（推镜到某张卡片、从按钮处放大）时，只能用一个 2W×2H 的包裹层，把目标点移到包裹层中心：
+flexlayer 0.2.19 起 `origin` 可以写任意一点：`"640 420"`、`"33% 39%"`、`"top 80"`，百分比按布局盒子算，支点可以在盒子外面。九宫格写法不变，`anchor` 仍只有九宫格。
 
-```ts
-// motionflexlayer 现在的 camera()：两层 layer
-h('layer', { x: W / 2, y: H / 2, anchor: 'center', width: W * 2, height: H * 2, scale: zoom },
-  h('layer', { x: W - x, y: H - y, width: W, height: H }, ...children))
-```
-
-这种写法能用，但不直观，而且模型自己写的时候很容易把偏移量算错。
-
-**建议。** `origin` 接受两个数，或者百分比：
-
-```html
-<layer width="1920" height="1080" origin="1160 575" scale="4">…</layer>
-<layer width="400" height="300" origin="25% 80%" rotate="-8">…</layer>
-```
-
-数字是 layer 自身坐标系里的位置。九宫格写法保留。
-
-**motionflexlayer 改完后。** `camera()` 变成一层：`h('layer', { x: W / 2, y: H / 2, anchor: 'center', width: W, height: H, origin: \`${x} ${y}\`, scale, rotate })`。
-
-**验收。** `origin="1160 575" scale="2"` 渲染出来，(1160, 575) 处的像素在缩放前后保持不动。
+motionflexlayer 的 `camera()` 从两层包裹改成一层：把 `(x, y)` 平移到画面中心，再以它为 `origin` 缩放、旋转。`place()` 的 `origin` 也接受 `'120 80'` 或 `[x, y]`。`test/nodes.spec.ts` 里验证了镜头只有一层、`origin` 写的是目标点。
 
 ## 6. 离屏画布按可见区域裁剪（P1）
 
@@ -239,6 +223,52 @@ const frames = renderFrames({ …, durationInFrames: frame + 1, component: () =>
 ## 14. `renderFrames` 的 `t` 由调用方给（P2，新增）
 
 `renderFrames` 用 `frame / fps` 算 `t`。motionflexlayer 的草稿模式会改 fps（60 改成 30），时间仍然对，但如果以后要做子帧（运动模糊），需要在同一帧号下传不同的 `t`。建议 `RenderFramesOptions` 加 `times?: number[]`，或者第 13 项的单帧接口接受任意 `t`。
+
+## 15. 中文折行：句读落到行首（P0，新增，缺陷）
+
+**问题。** `src/text.ts` 里 `glueUnits` 把不能出现在行首的标点（，。、；：？！）和前一个字粘在一起，但它是在 `wrapParagraph` 折完行之后、只在一行之内做的。折行时这些标点仍是独立的单位，所以可以被折到下一行的行首。
+
+用 Kai 700、64px 排 `先排版，再拆字。每个字都知道自己落在哪一行、哪一格。笔画着墨之处，就是它该在的地方。`：
+
+| 写法 | 出问题的尺寸 | 行首的标点 |
+| --- | --- | --- |
+| 横排，`line-height:1.6` | 宽 1500 | 。 |
+| 横排，另一段文字 | 宽 700、760 | ； 、 |
+| 竖排，`letter-spacing:0` | 高 400–460、540–680 | 。 、 ， |
+
+横排宽 780–1200 没问题。
+
+**motionflexlayer 现在的做法。** ink 示例排完版先查一遍行首（`headsOk`），拖动栏宽时遇到坏宽度就换下一个整数宽度。
+
+**建议。** 把禁则粘连挪到折行之前：可断点的候选里去掉“标点之前”，或者折行时把行首标点连同前一个字一起推到下一行（推出），行尾放不下时允许标点悬挂（挤进）。
+
+**验收。** 上面这段文字在横排宽 600–1600、竖排高 400–800 之间逐个整数尺寸扫一遍，行首都不是 ，。、；：？！。
+
+## 16. 合并子树墨迹时进 `g`（P1，新增，缺陷）
+
+**问题。** `layer` 上的 `ink-stroke`（以及 `shadow`、`glow` 的外扩轮廓）先合并整个子树的墨迹再描边。合并用的 `groupInkBounds` 和 `drawInkMask` 只往 `layer`、`flex` 里走，遇到 `g`（`kind: 'group'`）就当成叶子，而 `drawNodeInk` 对 group 什么也不画。结果是 `g` 里的路径不进描边：
+
+```ts
+h('layer', { 'ink-stroke': '12 #fff, 28 #e0432b' }, h('path', { d }))                               // 有描边
+h('layer', { 'ink-stroke': '12 #fff, 28 #e0432b' }, h('g', { transform: 'translate(800,300)' }, h('path', { d })))  // 没有描边
+```
+
+**motionflexlayer 现在的做法。** `glyphAt` 给每个字形包一层 `layer`（`x`、`y`、`rotate`、`scale`），不用 `g`。
+
+**建议。** `groupInkBounds`、`drawInkMask` 遇到 group 时按它的 `transform` 递归进子元素，和 layer 一样处理。
+
+**验收。** 上面第二种写法和第一种渲染出同样的描边（位置差 `translate` 的距离）。
+
+## 17. `canvas.create` 的字带上原文位置；竖排按列给（P2，新增）
+
+**问题。**
+
+- `text[].lines[].chars` 里没有折行处被吃掉的空格，所以“原文第 n 个字”和“chars 里第 n 个”对不上。要找某几个字的格子，只能把 `chars[].text` 拼起来再 `indexOf`。
+- 竖排时 `lines` 是一格一项（每项一个字），同一列只能靠 `x` 相同来认。
+
+**建议。** `PlacedChar` 加 `index`：这个字在节点原文里的偏移（UTF-16 或码点，写清楚是哪一种）。竖排时 `lines` 改成一列一项，或者每项加 `column`。
+
+**验收。** 对含空格、会折行的英文混排段落，`chars[k].index` 指回原文里同一个字。
 
 ---
 

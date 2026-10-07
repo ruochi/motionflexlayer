@@ -176,7 +176,7 @@ const on = typing || (f.t * 1.8) % 1 < 0.5
 
 ## 镜头
 
-**推镜到任意点。** `camera` 让世界坐标 `(x, y)` 落在画面中心，并绕它缩放：
+**推镜到任意点。** `camera` 让世界坐标 `(x, y)` 落在画面中心，并绕它缩放。它只是一层 layer：先平移，再以 `(x, y)` 为 `origin` 缩放、旋转：
 
 ```ts
 const z = Math.exp(Math.log(16) * progress(f.t, 30.5, 32, 'inOutCubic'))   // 按指数缩放，速度感才均匀
@@ -184,6 +184,17 @@ camera({ width: W, height: H, x: 1160, y: 575, zoom: z }, …scene)
 ```
 
 如果要让目标点在缩放的同时从原位滑到画面中心，令 `x = 目标 + (中心 - 屏幕位置) / zoom`。showreel 的 `layoutScene` 就是这样写的。
+
+**推向排版算出的一点。** 目标点不必手填：先用 `canvas.create` 量一遍整页，在 `text[].lines[].chars` 里找到要看的字，它的格子中心就是 `camera` 的 `x`、`y`。改了正文、换了栏宽，镜头还是对准那几个字。屏幕上的位置是 `(p - 镜头点) × zoom + 画面中心`，要在镜头外画框标出它时用这条式子。见 `examples/ink/page.ts`。
+
+**按对数插值缩放。** 从 15 倍拉到 1 倍再推到 5 倍，`zoom` 直接线性插值时，放大的那一头会一闪而过。对 `log(zoom)` 插值，画面里的运动速度才是匀的：
+
+```ts
+const logZ = lerp(Math.log(z0), Math.log(z1), progress(f.t, a, b, 'inOutCubic'))
+camera({ width: W, height: H, x, y, zoom: Math.exp(logZ) }, …world)
+```
+
+**绕任意点转一组内容。** `place` 的 `origin` 也接受任意点。卡片绕自己的左下角倒下：`place({ x, y, width: 400, height: 300, origin: 'bottom-left', rotate })`；绕卡片外的一点公转：`origin: [200, 900]`。
 
 **常驻的缓慢推进。** 整段 0 → 6% 的推进，让画面一直有呼吸感：
 

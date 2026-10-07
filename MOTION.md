@@ -76,6 +76,8 @@
 | 镜头里不放 `blur` / `mask` / `grade` / `glass` | `camera({ zoom: 16 }, reveal(…))` | 带这些效果的元素放到镜头外，或者在 zoom 不大的时候用 | 离屏画布按放大后的尺寸分配，单帧可能慢到几百毫秒 |
 | 动画文字不换行 | 让 `p` 自动折行 | `text()` 默认 `white-space:nowrap` | 字距、字号变化时整段重排，画面跳动 |
 | 逐字动画放在 `draw` 里 | 给 `span` 写 `transform` | `drawGlyphs(ctx, str, { each })` | `span` 不支持变换，属性被忽略 |
+| 要描边、投影的字形每个一层 `layer` | `h('g', { transform }, h('path', { d }))` 放进带 `ink-stroke` 的 layer | 每个字形一层 `layer`，写 `x`、`y`、`rotate`、`scale`（见 `examples/ink/kit.ts` 的 `glyphAt`） | flexlayer 0.2.20 合并子树墨迹时不进 `g`，描边、`shadow`、`glow` 都不出现 |
+| 在 `canvas.create` 的结果里按文字找字 | 按原文的序号数 `lines[].chars` | 把 `chars[].text` 拼起来，`indexOf` 找到要的那几个字 | 折行处的空格不占格，序号会错开；竖排时 `lines` 是一格一项，按 `x` 分列 |
 | `draw` 里不重置变换 | `ctx.setTransform(1, 0, 0, 1, 0, 0)`、`ctx.reset()` | 用 `ctx.save()` / `translate` / `restore()` | 破坏 flexlayer 的定位和 `scale` 倍率，导出半分辨率时位置错乱 |
 | `draw` 里不分配大对象 | 每帧 `createCanvas(1920, 1080)` | 在模块顶层或 `setup` 里建好，复用 | 内存上涨，越来越慢 |
 | 看不见的元素就不输出 | 透明度为 0 的层仍然放进文档 | `place()` 在透明度约为 0 时返回 `null`；条件渲染写 `cond && node` | 白白排版、绘制 |
@@ -260,11 +262,11 @@ npm run mfl -- render comp.ts                 # 成片
 
 **节点：**
 
-- `place({ x, y, anchor, opacity, rotate, scale, origin, width, height, attrs }, ...children)`：定位一组内容。`anchor` 默认 `center`；`attrs` 里可以写 `expect`、`glow`、`overflow` 等。
+- `place({ x, y, anchor, opacity, rotate, scale, origin, width, height, attrs }, ...children)`：定位一组内容。`anchor` 默认 `center`，只能是九宫格；`origin` 是缩放、旋转的支点，可以是九宫格、`'120 80'`、`'30% 40%'`，或 `[x, y]`（相对这一层的左上角）；`attrs` 里可以写 `expect`、`glow`、`overflow` 等。
 - `text(str, style)`：单行文字。
 - `box(style, ...children)`：flex 容器。
 - `fx({ width, height, x, y, name }, draw)`：绘图层。
-- `camera({ width, height, x, y, zoom, rotate, shakeX, shakeY }, ...children)`：镜头。
+- `camera({ width, height, x, y, zoom, rotate, shakeX, shakeY }, ...children)`：镜头。只有一层 layer：把世界坐标 `(x, y)` 平移到画面中心，再以它为 `origin` 缩放、旋转。
 - `roll({ value, cell, size, axis, align }, items)`：滚动窗口。
 - `reveal({ progress, width, height, direction, feather }, ...children)`：蒙版擦除。
 - `typewriter(tokens, shown, style)`：打字机。

@@ -82,6 +82,7 @@ npm run voice -- examples/narrated/index.ts              # 合成或读取旁白
 | [examples/hello-react](examples/hello-react/index.tsx) | 6 秒，React 写法：柱状图逐根长出、数字滚动、状态标签 |
 | [examples/showreel](examples/showreel/index.ts) | 48 秒、六段的参考片：几何、粒子、版式、3D 点云、落款。整首配乐用代码合成 |
 | [examples/narrated](examples/narrated/index.ts) | 约 33 秒的中文旁白片：时间轴由旁白长度决定，逐词字幕、人声波形、音乐给人声让频段、排版检查演示 |
+| [examples/ink](examples/ink/index.ts) | 72 秒、九个镜头的旁白片「着墨」：书法字一笔笔写出后落进段落里自己的格子，拖动栏宽逐帧重排再改竖排，三个字合成一圈墨迹描边，玻璃折射，挤出的立体字，镜头推向排版算出的一点，按着墨对齐。每个镜头都是网页或手写 canvas 要多费不少力气的事 |
 | [examples/synth](examples/synth/index.ts) | 程序化合成器套件，showreel 的配乐用的就是它 |
 
 ## 目录
@@ -105,5 +106,5 @@ src/
 - 核心写法和 React 写法可用；Vue 计划放在 v2，设计见 [REACT.md](docs/REACT.md#vuev2-计划)。
 - 视频帧走 flexlayer 的 `renderFrames` 原始 RGBA 输出，0.1 的 PNG 跳过垫片已删除。
 - 混音交给 visualtone：响度归一、限幅、人声闪避和分析报告都来自它。设了 `envelopes: true` 的合成，帧函数可以通过 `f.audio` 读到各音轨的电平和起音。
-- 还需要 flexlayer 配合的改动见 [FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)，例如 `origin` 任意点、离屏画布按可见区域裁剪。
+- 依赖 flexlayer 0.2.20：`origin` 可以写任意一点，`camera()` 已改成一层 layer。还需要 flexlayer 配合的改动见 [FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)，例如离屏画布按可见区域裁剪、`ink-stroke` 合并子树时进 `g`。
 - 音频是按响度报告、频段分析和波形检查的，没有人工试听过。
