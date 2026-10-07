@@ -21,10 +21,10 @@ const ROW_FONT = 'font-weight:800; font-size:180px; letter-spacing:0.02em'
 const ROW_TEXT = '排版 · 字形 · 着墨 · 折射 · '
 const ROW_W = canvas.create(h('layer', {}, h('p', { style: `white-space:nowrap; ${ROW_FONT}` }, ROW_TEXT))).width
 const ROWS = [
-  { y: 150, color: C.night, speed: -95 },
-  { y: 390, color: C.paper, speed: 120 },
-  { y: 630, color: C.night, speed: -80 },
-  { y: 870, color: C.paper, speed: 105 },
+  { y: 130, color: C.night, speed: -95 },
+  { y: 360, color: C.paper, speed: 120 },
+  { y: 590, color: C.night, speed: -80 },
+  { y: 820, color: C.paper, speed: 105 },
 ]
 
 /** 跑马灯：每行三份文字首尾相接，按速度平移，走完一份宽度就绕回来。 */
