@@ -1,4 +1,4 @@
-import { renderFvg, type FvgNode, type FvgReport } from '@dc/flexlayer'
+import { renderFvg, type FvgNode, type FvgReport } from 'flexlayer'
 import { nodeAt, type Composition } from '../composition.js'
 
 export type FrameResult = {

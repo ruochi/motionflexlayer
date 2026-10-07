@@ -1,7 +1,7 @@
 import { createContext, type ReactNode } from 'react'
 import Reconciler from 'react-reconciler'
 import { ConcurrentRoot, DefaultEventPriority } from 'react-reconciler/constants.js'
-import { h, type FvgChild, type FvgNode } from '@dc/flexlayer'
+import { h, type FvgChild, type FvgNode } from 'flexlayer'
 import { css, type StyleObject } from '../nodes.js'
 
 type Instance = { kind: 'el'; tag: string; props: Record<string, unknown>; children: Node[] }

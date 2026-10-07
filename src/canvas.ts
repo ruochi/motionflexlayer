@@ -2,7 +2,7 @@ import { existsSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { renderFvg, type DrawFn } from '@dc/flexlayer'
+import { renderFvg, type DrawFn } from 'flexlayer'
 
 /** flexlayer 的默认字体，可变字重。draw 里写 ctx.font 用它和画面其余文字一致。 */
 export const DEFAULT_FONT = 'ChillDuanSans'
@@ -45,7 +45,7 @@ let napi: NapiCanvas | undefined
  */
 function canvasModule(): NapiCanvas {
   if (!napi) {
-    const req = createRequire(join(findPackageDir('@dc/flexlayer'), 'package.json'))
+    const req = createRequire(join(findPackageDir('flexlayer'), 'package.json'))
     napi = req('@napi-rs/canvas') as NapiCanvas
   }
   return napi

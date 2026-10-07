@@ -1,4 +1,4 @@
-import type { FvgReport, Issue } from '@dc/flexlayer'
+import type { FvgReport, Issue } from 'flexlayer'
 import type { LintProfile } from '../composition.js'
 
 export type IssueStat = {

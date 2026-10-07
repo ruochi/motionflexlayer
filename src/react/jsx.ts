@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { DrawFn } from '@dc/flexlayer'
+import type { DrawFn } from 'flexlayer'
 import type { StyleObject } from '../nodes.js'
 
 type Num = number | string
@@ -10,14 +10,20 @@ export type FvgCommon = {
   style?: string | StyleObject
   /** 在元素自身内容画完之后调用，坐标原点是元素左上角。 */
   draw?: DrawFn
+  /** 结构化数据，draw 里从 el.data 取。 */
+  data?: unknown
+  /** 预期中的问题，例如 "overflow-canvas: 出血入场"。命中的降为 info。 */
+  expect?: string
   children?: ReactNode
   key?: string | number
 }
 
+/** x、y 是定位点，anchor 默认 top-left。 */
 type Positioned = FvgCommon & {
-  cx?: Num
-  cy?: Num
+  x?: Num
+  y?: Num
   anchor?: string
+  'anchor-box'?: 'box' | 'ink'
 }
 
 type Effects = {
@@ -33,8 +39,12 @@ type Effects = {
   blend?: string
 }
 
-type Shape = Positioned &
+type Shape = FvgCommon &
   Effects & {
+    x?: Num
+    y?: Num
+    cx?: Num
+    cy?: Num
     r?: Num
     rx?: Num
     ry?: Num
@@ -55,6 +65,8 @@ export type LayerProps = Positioned &
     /** 只在根上作为画布底色。 */
     background?: string
     color?: string
+    bleed?: Num
+    perspective?: Num
     'font-family'?: string
     safe?: Num
     opacity?: Num
@@ -79,9 +91,9 @@ export type FvgIntrinsicElements = {
   /** 蒙版，只能是 layer 的直接子元素。里面的图形只取 alpha。 */
   mask: FvgCommon
   use: Positioned & { href?: string; rotate?: Num; scale?: Num }
-  rect: Shape & Box4
+  rect: Shape
   circle: Shape
-  ellipse: Shape & Box4
+  ellipse: Shape
   line: FvgCommon & Box4 & { stroke?: string; 'stroke-width'?: Num }
   arrow: FvgCommon & Box4 & { head?: Num; stroke?: string; 'stroke-width'?: Num }
   polyline: FvgCommon & { points?: string; stroke?: string; 'stroke-width'?: Num }

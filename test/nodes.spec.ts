@@ -1,4 +1,4 @@
-import { h, type FvgNode } from '@dc/flexlayer'
+import { h, type FvgNode } from 'flexlayer'
 import { describe, expect, it } from 'vitest'
 import { camera, css, fx, place, typewriter } from '../src/nodes.js'
 import { renderRaw } from '../src/render/raw.js'
@@ -32,7 +32,7 @@ describe('css', () => {
 describe('place', () => {
   it('几乎透明时返回 null，整棵子树不进文档', () => {
     expect(place({ x: 0, y: 0, opacity: 0.001 })).toBeNull()
-    expect(place({ x: 1.23456, y: 2 })!.attrs.cx).toBe('1.23')
+    expect(place({ x: 1.23456, y: 2 })!.attrs.x).toBe('1.23')
   })
 })
 

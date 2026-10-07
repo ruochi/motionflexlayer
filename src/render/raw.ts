@@ -1,4 +1,4 @@
-import { renderFvg, type FvgNode, type FvgReport, type RenderOptions } from '@dc/flexlayer'
+import { renderFvg, type FvgNode, type FvgReport, type RenderOptions } from 'flexlayer'
 import { createCanvas } from '../canvas.js'
 
 export type RawFrame = { rgba: Buffer; width: number; height: number; report: FvgReport }

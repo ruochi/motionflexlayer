@@ -47,9 +47,9 @@ motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做
 
 npm 安装 git 依赖时会执行 `prepare`，自动构建。
 
-**motionflexlayer 改完后。** 依赖从 `"@dc/flexlayer": "file:../flexlayer"` 改成 `"github:ruochi/flexlayer#<tag>"`，或者等 flexlayer 发布到 npm 后改成版本号。
+**motionflexlayer 改完后。** 依赖从 `"flexlayer": "file:../flexlayer"` 改成 `"github:ruochi/flexlayer#<tag>"`，或者等 flexlayer 发布到 npm 后改成版本号。
 
-**验收。** 在一个空目录里执行 `npm i github:ruochi/flexlayer`，然后 `node -e "import('@dc/flexlayer').then(m => console.log(typeof m.renderFvg))"` 输出 `function`。
+**验收。** 在一个空目录里执行 `npm i github:ruochi/flexlayer`，然后 `node -e "import('flexlayer').then(m => console.log(typeof m.renderFvg))"` 输出 `function`。
 
 ## 2. 导出字体与 canvas（P0）
 

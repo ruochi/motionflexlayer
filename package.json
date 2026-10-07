@@ -1,7 +1,7 @@
 {
   "name": "motionflexlayer",
-  "version": "0.1.0",
-  "description": "Motion Flex Layer：在 flexlayer 之上做动画。时间轴、节拍、动效原语、并行渲染、音轨混音，核心与 React 两种写法",
+  "version": "0.2.0",
+  "description": "Motion Flex Layer：在 flexlayer 之上做视频。时间轴、动效原语、旁白排期、visualtone 混音、并行渲染，核心与 React 两种写法",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -36,11 +36,13 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "mfl": "tsx src/cli.ts",
-    "assets": "tsx examples/assets/make-assets.ts"
+    "assets": "tsx examples/assets/make-assets.ts",
+    "voice": "tsx src/cli.ts voice"
   },
   "license": "MIT",
   "dependencies": {
-    "@dc/flexlayer": "file:../flexlayer",
+    "flexlayer": "github:ruochi/flexlayer#c77b413f034b65d4726d605c1a9d43421652cdfa",
+    "visualtone": "github:ruochi/visualtone#45751eab2e29fe90a2c2e7a9c7986cc6803ad0e4",
     "tsx": "^4.19.2"
   },
   "peerDependencies": {

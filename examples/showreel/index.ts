@@ -210,7 +210,7 @@ function layoutScene(t: number) {
   return camera(
     // 镜头对准的世界坐标 = 让 ORBIT_AT 落在 screen 处的那个点
     { ...SIZE, zoom, x: ORBIT_AT[0] + (W / 2 - screen[0]) / zoom, y: ORBIT_AT[1] + (H / 2 - screen[1]) / zoom },
-    h('headline', { cx: 960, cy: 205, width: 1500, height: 140, opacity: headOut.toFixed(3), draw: (ctx, el) => drawHeadline(ctx, el, el.t) }),
+    h('headline', { x: 960, y: 205, anchor: 'center', width: 1500, height: 140, opacity: headOut.toFixed(3), draw: (ctx, el) => drawHeadline(ctx, el, el.t) }),
     place({ x: 960, y: 322 + (1 - subIn) * 14, opacity: subIn }, label('布局交给 flex，像素交给 draw', { fontSize: 32, color: MUTED, letterSpacing: 6 })),
     ...[0, 1, 3, 2].map((i) => card(i, t)),
   )

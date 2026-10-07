@@ -1,4 +1,4 @@
-import { h, type DrawFn, type FvgChild, type FvgNode } from '@dc/flexlayer'
+import { h, type DrawFn, type FvgChild, type FvgNode } from 'flexlayer'
 import { clamp, r2 } from './math.js'
 
 export { h }
@@ -47,7 +47,7 @@ export type PlaceOptions = {
   /** 度。 */
   rotate?: number
   scale?: number
-  /** 旋转、缩放的支点。目前只支持九宫格，见 docs/FLEXLAYER-CHANGES.md。 */
+  /** 旋转、缩放的支点，九宫格。默认 center。 */
   origin?: Anchor
   width?: number
   height?: number
@@ -67,9 +67,9 @@ export function place(opts: PlaceOptions, ...children: Child[]): FvgNode | null 
     'layer',
     {
       id: opts.id,
-      cx: r2(opts.x),
-      cy: r2(opts.y),
-      anchor: opts.anchor && opts.anchor !== 'center' ? opts.anchor : undefined,
+      x: r2(opts.x),
+      y: r2(opts.y),
+      anchor: opts.anchor === 'top-left' ? undefined : (opts.anchor ?? 'center'),
       width: opts.width,
       height: opts.height,
       opacity: opacity < 1 ? r2(clamp(opacity) * 1000) / 1000 : undefined,
@@ -111,8 +111,9 @@ export type FxOptions = {
 export function fx(opts: FxOptions, draw: DrawFn): FvgNode {
   return h(opts.name ?? 'fx', {
     id: opts.id,
-    cx: r2(opts.x ?? opts.width / 2),
-    cy: r2(opts.y ?? opts.height / 2),
+    x: r2(opts.x ?? opts.width / 2),
+    y: r2(opts.y ?? opts.height / 2),
+    anchor: 'center',
     width: opts.width,
     height: opts.height,
     draw,
@@ -151,14 +152,15 @@ export function camera(opts: CameraOptions, ...children: Child[]): FvgNode {
   return h(
     'layer',
     {
-      cx: r2(W / 2 + (opts.shakeX ?? 0)),
-      cy: r2(H / 2 + (opts.shakeY ?? 0)),
+      x: r2(W / 2 + (opts.shakeX ?? 0)),
+      y: r2(H / 2 + (opts.shakeY ?? 0)),
+      anchor: 'center',
       width: W * 2,
       height: H * 2,
       scale: zoom !== 1 ? Math.round(zoom * 10000) / 10000 : undefined,
       rotate: opts.rotate ? r2(opts.rotate) : undefined,
     },
-    h('layer', { cx: r2(W - x), cy: r2(H - y), anchor: 'top-left', width: W, height: H }, ...children),
+    h('layer', { x: r2(W - x), y: r2(H - y), width: W, height: H }, ...children),
   )
 }
 
@@ -185,8 +187,8 @@ export function rollLayout(opts: RollOptions) {
   return {
     window: { width: vertical ? opts.size : opts.cell, height: vertical ? opts.cell : opts.size, overflow: 'hidden' },
     slider: {
-      cx: vertical ? crossAt : r2(-opts.value * opts.cell),
-      cy: vertical ? r2(-opts.value * opts.cell) : crossAt,
+      x: vertical ? crossAt : r2(-opts.value * opts.cell),
+      y: vertical ? r2(-opts.value * opts.cell) : crossAt,
       anchor,
     },
     column: { style: `display:flex; flex-direction:${vertical ? 'column' : 'row'}; align-items:${align}` },
@@ -231,11 +233,11 @@ export function reveal(opts: RevealOptions, ...children: Child[]): FvgNode | nul
   const travel = p * len * (1 + feather)
   const solid = `${r2((1 - feather) * 100)}%`
   let rect: Record<string, number | string>
-  if (dir === 'right') rect = { x1: 0, y1: 0, x2: travel, y2: H, fill: `linear-gradient(to right, #fff 0%, #fff ${solid}, #fff0 100%)` }
-  else if (dir === 'left') rect = { x1: W - travel, y1: 0, x2: W, y2: H, fill: `linear-gradient(to left, #fff 0%, #fff ${solid}, #fff0 100%)` }
-  else if (dir === 'down') rect = { x1: 0, y1: 0, x2: W, y2: travel, fill: `linear-gradient(to bottom, #fff 0%, #fff ${solid}, #fff0 100%)` }
-  else rect = { x1: 0, y1: H - travel, x2: W, y2: H, fill: `linear-gradient(to top, #fff 0%, #fff ${solid}, #fff0 100%)` }
-  for (const k of ['x1', 'y1', 'x2', 'y2']) rect[k] = r2(rect[k] as number)
+  if (dir === 'right') rect = { x: 0, y: 0, width: travel, height: H, fill: `linear-gradient(to right, #fff 0%, #fff ${solid}, #fff0 100%)` }
+  else if (dir === 'left') rect = { x: W - travel, y: 0, width: travel, height: H, fill: `linear-gradient(to left, #fff 0%, #fff ${solid}, #fff0 100%)` }
+  else if (dir === 'down') rect = { x: 0, y: 0, width: W, height: travel, fill: `linear-gradient(to bottom, #fff 0%, #fff ${solid}, #fff0 100%)` }
+  else rect = { x: 0, y: H - travel, width: W, height: travel, fill: `linear-gradient(to top, #fff 0%, #fff ${solid}, #fff0 100%)` }
+  for (const k of ['x', 'y', 'width', 'height']) rect[k] = r2(rect[k] as number)
   return h('layer', { width: W, height: H }, h('mask', {}, h('rect', rect)), ...children)
 }
 

@@ -1,4 +1,4 @@
-import type { FvgNode } from '@dc/flexlayer'
+import type { FvgNode } from 'flexlayer'
 import { createElement as e, createContext, useContext, type ReactElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { frameAt, defineComposition } from '../src/composition.js'

@@ -1,5 +1,5 @@
 import { createContext, createElement as e, Fragment, useContext, type ReactElement, type ReactNode } from 'react'
-import type { DrawFn, FvgChild, FvgNode } from '@dc/flexlayer'
+import type { DrawFn, FvgChild, FvgNode } from 'flexlayer'
 import type { Frame } from '../composition.js'
 import {
   camera,
@@ -106,7 +106,7 @@ export function Fx({ draw, width, height, x, y, name, id }: FxProps): ReactEleme
   const f = useFrame()
   const w = width ?? f.width
   const hh = height ?? f.height
-  return e(name ?? 'fx', { id, cx: x ?? w / 2, cy: y ?? hh / 2, width: w, height: hh, draw })
+  return e(name ?? 'fx', { id, x: x ?? w / 2, y: y ?? hh / 2, anchor: 'center', width: w, height: hh, draw })
 }
 
 export type CameraProps = Omit<CameraOptions, 'width' | 'height'> & { width?: number; height?: number; children?: ReactNode }

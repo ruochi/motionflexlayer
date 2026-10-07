@@ -1,6 +1,6 @@
 import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { h, type FvgChild, type FvgNode } from '@dc/flexlayer'
+import { h, type FvgChild, type FvgNode } from 'flexlayer'
 import type { AudioSpec } from './audio/types.js'
 import { ensureFonts } from './canvas.js'
 import { Timeline, type SectionState } from './timeline.js'
