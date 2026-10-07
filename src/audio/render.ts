@@ -39,7 +39,10 @@ export async function renderAudio(
   const sr = mix.sampleRate
   const a = Math.round((opts.from ?? 0) * sr)
   const b = Math.round((opts.to ?? comp.duration) * sr)
-  const cut: Stereo = { l: mix.l.subarray(a, b), r: mix.r.subarray(a, b) }
+  // 帧数按 round(时长 × fps) 取整，可能比音频长几毫秒；补静音，免得封装时 -shortest 截掉末尾几帧
+  const cut: Stereo = { l: new Float32Array(Math.max(0, b - a)), r: new Float32Array(Math.max(0, b - a)) }
+  cut.l.set(mix.l.subarray(a, Math.min(b, mix.l.length)))
+  cut.r.set(mix.r.subarray(a, Math.min(b, mix.r.length)))
   await mkdir(dirname(outFile), { recursive: true })
   await writeFile(outFile, encodeWav(cut, sr))
 

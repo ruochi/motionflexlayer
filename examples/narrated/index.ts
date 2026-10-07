@@ -239,14 +239,15 @@ function checkFn(f: Frame) {
   const a = presence(f.t, l)
   if (a <= 0) return null
   const apart = spring(f.t - SEPARATE, { damping: 15, stiffness: 120 })
-  const overlap = apart < 0.5
+  const dx = 40 + apart * 400
+  // 两个标签着墨半宽约 72 和 108px，中心相距 2·dx，小于两者之和就重叠
+  const overlap = 2 * dx < 72 + 108
   // 重叠报在先画的那张卡片上，expect 也只写在它身上
   const card = (label: string, x: number, color: string, id: string, expect?: string) =>
     place(
       { x, y: 470, id, attrs: expect ? { expect } : undefined },
       h('div', { style: `width:520px; height:260px; border-radius:24px; background:${color}; display:flex; align-items:center; justify-content:center` }, text(label, { fontSize: 72, fontWeight: 800, color: PAPER })),
     )
-  const dx = 40 + apart * 400
   const ok = progress(f.t, RESOLVED - 0.1, RESOLVED + 0.2)
   return [
     card('标题', W / 2 - dx, INK, 'card-a', overlap ? 'text-overlap: 演示重叠检查' : undefined),

@@ -160,13 +160,14 @@ export class Narration {
   /**
    * 登记到时间轴：每句一个段落（名字是 id），开口处一个同名 cue，
    * 另有 'line'（每句开口）和 'word'（每个词开口）两组 cue。
+   * 这些 cue 带 audit: false，音频报告不拿它们检查音效是否落点。
    */
   apply(tl: Timeline): Timeline {
     for (const l of this.lines) {
       tl.section(l.id, l.from, { text: l.text, ...l.data })
-      tl.cue(l.id, l.speechFrom, { text: l.text })
-      tl.cue('line', l.speechFrom, { id: l.id })
-      for (const w of l.words) tl.cue('word', w.from, { line: l.id, text: w.text })
+      tl.cue(l.id, l.speechFrom, { text: l.text, audit: false })
+      tl.cue('line', l.speechFrom, { id: l.id, audit: false })
+      for (const w of l.words) tl.cue('word', w.from, { line: l.id, text: w.text, audit: false })
     }
     if (!(tl.duration > 0)) tl.duration = this.duration
     return tl

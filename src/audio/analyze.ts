@@ -57,7 +57,8 @@ export function analyzeAudio(
     ...level(s, Math.round(sec.from * sr), Math.round(sec.to * sr)),
   }))
   const w = Math.round(0.05 * sr)
-  const cues = (tl?.cues() ?? []).map((c) => {
+  // 旁白登记的 cue（每句、每词）是人声，不检查音效
+  const cues = (tl?.cues() ?? []).filter((c) => c.data?.audit !== false).map((c) => {
     const n = Math.round(c.t * sr)
     return { name: c.name, t: c.t, jump: Math.round((level(s, n, n + w).rms - level(s, n - w, n).rms) * 10) / 10 }
   })
