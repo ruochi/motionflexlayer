@@ -23,26 +23,33 @@ export default defineComposition({
 
 ## 给模型看的入口
 
-让模型做动画时，先让它读 **[MOTION.md](MOTION.md)**。里面写了心智模型、硬规则、四步工作流（时间轴 → 帧函数 → 音频 → 验证）、API 速查和动效基本功。
+让模型做动画时，先让它读 **[MOTION.md](MOTION.md)**。里面写了标准输入流程、心智模型、硬规则、四步工作流（时间轴 → 帧函数 → 音频 → 验证）、API 速查、动效基本功，以及怎样避免每支片子都一个样。
 
 其余文档：
 
 - [docs/RECIPES.md](docs/RECIPES.md)：动效配方，包括入场、冲击、文字、镜头、计数器、粒子、3D、质感；
-- [docs/AUDIO.md](docs/AUDIO.md)：音轨、母线、闪避，以及看不到、听不到声音时怎么检查；
+- [docs/NARRATION.md](docs/NARRATION.md)：旁白先行。用 TTS 念出文案，按旁白长度排时间轴，字幕和逐词动效从同一份数据来；
+- [docs/AUDIO.md](docs/AUDIO.md)：音频交给 visualtone 混音。音轨、母线、人声闪避、响度，以及听不到声音时怎么检查；
 - [docs/REACT.md](docs/REACT.md)：React 写法；
 - [docs/FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)：需要 flexlayer 配合的改动。
 
 ## 安装
 
-现在依赖本地的 flexlayer（`file:../flexlayer`），两个仓库要放在同一级目录下：
+flexlayer 和 visualtone 以 git 依赖的方式固定在具体提交上，`npm i` 时会自动拉取并构建，不需要再把仓库并排放：
 
 ```bash
-git clone https://github.com/ruochi/flexlayer
 git clone https://github.com/ruochi/motionflexlayer
-(cd flexlayer && npm i && npm run build)
 cd motionflexlayer && npm i
 npm run assets          # 生成示例用的音频文件
 ```
+
+要合成新的旁白，还需要 Python 3 和 edge-tts（需要联网）：
+
+```bash
+pip install edge-tts     # 解释器不是 python3 时，用环境变量 MFL_PYTHON 指定
+```
+
+旁白音频会缓存在仓库里（例如 `examples/narrated/voice/`），文案和音色没变就不会重新合成。离线环境设 `MFL_TTS_OFFLINE=1`：缓存缺失时直接报错，而不是去联网。
 
 需要 ffmpeg。程序按以下顺序查找：
 
@@ -62,6 +69,7 @@ npm run mfl -- audio  examples/hello/index.ts            # WAV、波形图、电
 npm run mfl -- render examples/hello/index.ts            # 多进程渲染 mp4，带音轨
 npm run mfl -- render examples/hello/index.ts --scale 0.5 --fps 30 --from 2 --to 6   # 草稿
 npm run mfl -- cues   examples/hello/index.ts            # 导出时间轴 JSON
+npm run voice -- examples/narrated/index.ts              # 合成或读取旁白，按段列出时间和语速
 ```
 
 输出在 `out/<id>/` 下。
@@ -73,6 +81,7 @@ npm run mfl -- cues   examples/hello/index.ts            # 导出时间轴 JSON
 | [examples/hello](examples/hello/index.ts) | 10 秒，核心写法的最小完整示例：逐字弹簧标题、蒙版擦除、节拍计数器、打字机、冲击震屏，配 BGM 和音效 |
 | [examples/hello-react](examples/hello-react/index.tsx) | 6 秒，React 写法：柱状图逐根长出、数字滚动、状态标签 |
 | [examples/showreel](examples/showreel/index.ts) | 48 秒、六段的参考片：几何、粒子、版式、3D 点云、落款。整首配乐用代码合成 |
+| [examples/narrated](examples/narrated/index.ts) | 约 33 秒的中文旁白片：时间轴由旁白长度决定，逐词字幕、人声波形、音乐给人声让频段、排版检查演示 |
 | [examples/synth](examples/synth/index.ts) | 程序化合成器套件，showreel 的配乐用的就是它 |
 
 ## 目录
@@ -84,15 +93,17 @@ src/
   composition.ts                                defineComposition、帧、加载
   nodes.ts drawkit.ts canvas.ts                 动效原语（镜头、滚动、擦除、打字）、draw 工具
   render/                                       静帧、联系表、多进程视频、问题汇总
-  audio/                                        解码、混音、闪避、限幅、WAV、报告、波形
+  audio/                                        AudioSpec 编译成 visualtone 乐谱、混音、包络、WAV、报告、波形
+  voice/                                        TTS（edge-tts）、缓存、旁白时间轴、逐词对齐
   react/                                        React 适配
   cli.ts
 ```
 
 ## 现状
 
-- 版本 0.1，接口可能还会变。
+- 版本 0.2，接口可能还会变。对 0.1 的写法，主要变化是定位从 `cx`、`cy` 改成 `x`、`y`、`anchor`（flexlayer 0.2 的要求），母线输出改成 `master: { lufs, ceiling }`。
 - 核心写法和 React 写法可用；Vue 计划放在 v2，设计见 [REACT.md](docs/REACT.md#vuev2-计划)。
-- 依赖本地 flexlayer，暂时没有发布到 npm，原因见 [FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md) 第 1 项。
-- `render` 用了一个临时垫片，跳过 flexlayer 的 PNG 编码，全片快约 3 倍。flexlayer 支持原始像素输出后删除，见第 8 项。
-- 音频是按电平报告和波形检查的，没有人工试听过。
+- 视频帧走 flexlayer 的 `renderFrames` 原始 RGBA 输出，0.1 的 PNG 跳过垫片已删除。
+- 混音交给 visualtone：响度归一、限幅、人声闪避和分析报告都来自它。设了 `envelopes: true` 的合成，帧函数可以通过 `f.audio` 读到各音轨的电平和起音。
+- 还需要 flexlayer 配合的改动见 [FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)，例如 `origin` 任意点、离屏画布按可见区域裁剪。
+- 音频是按响度报告、频段分析和波形检查的，没有人工试听过。

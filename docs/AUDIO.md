@@ -1,14 +1,22 @@
 # 音频
 
-声音和画面共用一条时间轴。音乐、底鼓、冲击、扫光这些节点写成 timeline 上的 cue，画面用 `pulse(f.t, tl.times('kick'))` 读这些时间，音频用 `sfx(src, tl.times('kick'))` 读同一组时间。所以只要 cue 写对，音画就是对齐的，不需要再手动调整偏移。
+声音和画面共用一条时间轴。旁白的句子、音乐的段落、底鼓、冲击、扫光这些节点都是 timeline 上的 cue 或段落：画面用 `pulse(f.t, tl.times('kick'))` 读这些时间，音频用 `sfx(src, tl.times('kick'))` 读同一组时间。cue 写对了，音画就是对齐的。
+
+混音由 [visualtone](https://github.com/ruochi/visualtone) 完成。`AudioSpec` 是一层薄薄的写法，编译成 visualtone 的乐谱：
 
 ```
-clips ─┬─▶ bus 'main'  ──┐
-       ├─▶ bus 'music' ──┼─▶ master（增益 → 淡入淡出 → 归一 → 软限幅）─▶ 16-bit WAV
-       └─▶ bus 'drums' ──┘
+clips ─┬─▶ 母线 'voice' ─▶ 音轨 voice (role: voice)  ─┐
+       ├─▶ 母线 'music' ─▶ 音轨 music (duck by voice) ─┤
+       └─▶ 母线 'main'  ─▶ 音轨 main                  ─┼─▶ visualtone：混响/延迟总线 → 均衡/压缩 → LUFS 对齐 → 限幅 ─▶ WAV
+tracks（visualtone 原生：音符、内置音效）──────────────┘
 ```
 
-`render` 会把混好的 WAV 编码成 AAC，和视频合进同一个 mp4。`audio` 命令只出声音：生成 WAV、波形图和电平报告。
+- 每条母线编成一条立体声音轨，片段变成它的 `clips`；
+- 片段的声像、循环预先烘进缓冲，dB 增益换成线性；
+- 按时间的闪避编成 `automation.gain` 关键帧，按电平的闪避交给 visualtone 的 `duck`；
+- 同样的输入永远得到同样的输出。
+
+`render` 会把混好的 WAV 编码成 AAC，和视频合进同一个 mp4。`audio` 命令只出声音：WAV、乐谱 JSON、波形图和报告。
 
 ## 写在哪里
 
@@ -16,7 +24,8 @@ clips ─┬─▶ bus 'main'  ──┐
 defineComposition({
   …,
   timeline: tl,
-  audio: ({ tl, duration }) => ({ clips: […], buses: {…}, master: {…} }),
+  envelopes: true,                       // 画面要读电平时才写
+  audio: ({ tl, duration }) => ({ clips: […], buses: {…}, tracks: […], master: {…} }),
 })
 ```
 
@@ -27,27 +36,19 @@ defineComposition({
 | 字段 | 默认 | 说明 |
 | --- | --- | --- |
 | `src` | — | 文件路径（相对合成文件所在目录，任何 ffmpeg 能读的格式），或 `{ render(ctx) → { l, r } }` |
-| `at` | 0 | 放在时间轴的第几秒 |
+| `at` | 0 | 放在时间轴的第几秒。可以是负数：从音源中间开始播 |
 | `offset` | 0 | 从音源的第几秒开始取 |
 | `duration` | 到音源结束 | 取多长；`loop` 时缺省铺到合成结束 |
 | `loop` | false | 循环。8 秒的 BGM 小样铺满全片用这个 |
 | `gain` | 0 | dB |
 | `pan` | 0 | -1 左 … 1 右，等功率声像 |
-| `fadeIn` / `fadeOut` | 0 | 秒，正弦曲线 |
+| `fadeIn` / `fadeOut` | 0 | 秒，线性 |
 | `bus` | `'main'` | 进哪条母线 |
-| `label` | — | 只用于报告 |
 
-`at` 可以是负数：音源从中间开始播。比如 whoosh 的峰值在文件的 0.45 秒处，想让峰值落在冲击点上，就写 `at: impact - 0.45`。更清楚的写法是在时间轴上单独建一个 cue：`tl.cue('whoosh', tl.bar(2) - 0.45)`。
-
-**一个音效放在一组时间点上：**
+whoosh 的峰值在文件的 0.45 秒处，想让峰值落在冲击点上，就写 `at: impact - 0.45`。更清楚的写法是在时间轴上单独建一个 cue：`tl.cue('whoosh', tl.bar(2) - 0.45)`。
 
 ```ts
-...sfx('../assets/kick.wav', tl.times('kick'), { gain: -5, bus: 'drums' })
-```
-
-**每个点的参数不同时，直接用 map：**
-
-```ts
+...sfx('../assets/kick.wav', tl.times('kick'), { gain: -5, bus: 'drums' })          // 一个音效放在一组时间点上
 ...tl.times('type').map((at, i, all) => ({ src: '../assets/tick.wav', at, gain: -14, pan: (i / all.length - 0.5) * 0.8 }))
 ```
 
@@ -55,41 +56,93 @@ defineComposition({
 
 ```ts
 buses: {
-  music: { gain: -2, duck: { times: tl.times('kick'), depth: 0.55, release: 0.16 } },
-  voice: {},
-  bed: { duck: { by: 'voice', depth: 0.6, threshold: -32, release: 0.4 } },
+  voice: { comp: { threshold: -24, ratio: 2.5, attackMs: 8, releaseMs: 120, knee: 6, makeup: 0 } },
+  music: { gain: -2, duck: [{ by: 'voice', depth: 0.6, band: [1000, 4000] }, { times: tl.times('kick'), depth: 0.4 }] },
 }
 ```
 
-`duck`（闪避）有两种：
+| 字段 | 说明 |
+| --- | --- |
+| `gain` | dB，加到这条母线的每个片段上 |
+| `duck` | 闪避，见下 |
+| `role` | `voice` / `music` / `sfx`，分析时归类用。缺省按名字猜：`voice`、`vo`、`narration` → voice；`music`、`bgm` → music；`sfx`、`fx` → sfx |
+| `eq` / `comp` | visualtone 的均衡和压缩，写法见 visualtone 的 README |
+| `space` / `room` / `echo` | 混响、房间、延迟的发送量 0..1 |
 
-- **按时间：** `times`。每个时间点把这条母线的音量压下去 `depth`，在 `attack` 时间内压到底，保持 `hold`，再按 `release` 指数恢复。给底鼓让路的“抽吸感”就是这么来的。用的是画面脉冲同一组时间，所以视觉上的一次跳动，正好对应音乐的一次“吸气”。
-- **按电平：** `by: '另一条母线'`。跟踪那条母线的包络（上升用 `attack`，下降用 `release`）。电平超过 `threshold` 后开始压低本母线，超出 12 dB 时压满 `depth`，中间线性过渡。人声或旁白压背景音乐用这种。
+### 闪避 `duck`
 
-两种可以同时用，写成数组：`duck: [{ times }, { by: 'voice' }]`。
+- **按电平：** `by: '另一条母线或音轨'`。那条轨响起来时压低本母线 `depth`。`hold` 是声音停了以后再压住多久（默认 0.25 秒，免得旁白字间一松一紧），`release` 是恢复时间。写了 `band: [1000, 4000]` 时只压这个频段，其余频段原样保留，给旁白让路首选这种。一条母线只能有一个 `by`。
+- **按时间：** `times`。每个时间点把这条母线压下去 `depth`，在 `attack` 内压到底，保持 `hold`，再按 `release` 指数恢复。给底鼓让路的“抽吸感”就是这么来的。用的是画面脉冲同一组时间，所以视觉上的一次跳动，正好对应音乐的一次“吸气”。
 
-参数参考：
+两种可以同时用，写成数组。
 
-| 场景 | `depth` | `attack` | `release` |
-| --- | --- | --- | --- |
-| 底鼓抽吸，舞曲感 | 0.5–0.7 | 0.005–0.01 | 0.12–0.2 |
-| 冲击点让路 | 0.6–0.8 | 0.005 | 0.4–0.8 |
-| 旁白压音乐 | 0.5–0.7 | 0.03–0.08 | 0.3–0.6 |
+| 场景 | 写法 |
+| --- | --- |
+| 旁白压音乐 | `{ by: 'voice', depth: 0.5–0.75, band: [1000, 4000] }` |
+| 旁白压音乐，音乐很满 | 再加一条整体的：先降音乐的 `gain`，再用 band 闪避 |
+| 底鼓抽吸，舞曲感 | `{ times: tl.times('kick'), depth: 0.5–0.7, attack: 0.005–0.01, release: 0.12–0.2 }` |
+| 冲击点让路 | `{ times: tl.times('impact'), depth: 0.6–0.8, release: 0.4–0.8 }` |
 
-## 母线总出 `master`
+## visualtone 原生音轨 `tracks`
+
+不用音频文件也能有音乐和音效。`tracks` 里直接写 visualtone 的音轨：
+
+```ts
+import { chord } from 'visualtone'
+
+tracks: [
+  {
+    id: 'pad', role: 'music', engine: 'epiano', hue: 210, lightness: 0.42, space: 0.55,
+    notes: chord('Fmaj7', 'F4').map((y) => ({ t: tl.at('intro'), y, size: 0.1, duration: 3, ease: 'exp' })),
+    duck: { by: 'voice', amount: 0.75, band: [1000, 4000] },
+  },
+  {
+    id: 'fx', role: 'sfx',
+    sfx: [
+      { sfx: 'whoosh', t: tl.at('how') - 0.2, size: 0.3, direction: 0.6 },
+      { sfx: 'impact', t: tl.at('outro'), size: 0.45, low: 0.6 },
+    ],
+  },
+]
+```
+
+- 音轨 id 和母线名共用一个命名空间，`duck.by` 可以互相引用；
+- 没写 `channel` 时框架补成立体声 `[0, 1]`（visualtone 自己的缺省是单声道）；
+- 内置音效：`whoosh`、`riser`、`swell`、`impact`、`pop`、`tick`、`key`、`shimmer`。它们在 visualtone 里按事件展开成 `fx:whoosh-1` 这样的音轨，包络里另有按前缀合并的 `fx`；
+- 用小节记法（`at: "4:2"`、`len: "1/8"`、`pitch: "A3"`）时，在 AudioSpec 上写 `bpm`；
+- 音色：`hue` 决定音色家族，`lightness` 决定明暗，`engine` 可选 `wavetable`、`pluck`、`marimba`、`epiano`。完整字段见 visualtone 的 README。
+
+## 总线 `master`
 
 | 字段 | 默认 | 说明 |
 | --- | --- | --- |
-| `gain` | 0 | dB |
-| `fadeIn` / `fadeOut` | 0 | 秒。全片结尾一般留 1–1.5 秒淡出 |
-| `normalize` | 不归一 | 先把峰值拉到这个 dBFS（例如 -1），再进限幅 |
-| `limit` | -0.5 | 软限幅的天花板，dBFS；`false` 关闭 |
+| `lufs` | -16 | 目标积分响度（BS.1770）。网络视频 -16 到 -14 |
+| `ceiling` | -1 | 限幅器天花板，dBFS |
+| `drive` | 0 | 总线饱和。有旁白时保持 0 |
+| `fadeIn` / `fadeOut` | 0 | 秒。全片结尾一般留 0.8–1.5 秒淡出 |
+| `reverb` / `room` / `delay` / `eq` / `comp` | — | visualtone 的总线效果 |
 
-软限幅的工作方式：天花板 85% 以下的信号原样通过，以上的部分用 tanh 圆滑地压进天花板。它是保险，不是响度工具：报告里的“限幅”比例超过 1%，说明整体太响，应该降片段或母线的增益，而不是指望限幅器去压。
+限幅器是保险，不是响度工具：报告里的“限幅”超过 3 dB，说明某处太冲，应该降那里的片段增益。
+
+## 画面读声音：包络
+
+合成写 `envelopes: true` 时，渲染前先混一遍音，算出每条母线和音轨的逐帧电平和起音时刻。帧函数里：
+
+```ts
+f.audio!.level('voice')               // RMS 电平，线性，帧间插值；不传参数是总线
+f.audio!.db('music')                  // dBFS，静音为 -120
+f.audio!.onsets('fx')                 // 起音时刻，喂给 pulse / springSteps
+f.audio!.since('fx')                  // 距上一次起音多少秒
+f.audio!.at(f.t - k / 30).level('voice')   // 另一时刻的读数，画滚动波形
+```
+
+多进程渲染时，主进程混音一次，把包络写成 JSON 发给每个 worker，worker 不再混音。
+
+能用时间轴解决的就别用包络：音效落在 cue 上，画面直接读同一个 cue 更准。包络适合“声音本身的形状”：旁白的起伏、音乐的能量、电平表。
 
 ## 程序化音源
 
-不想用音频文件时，`src` 也可以是一个生成采样的函数：
+不想用音频文件、也不想写 visualtone 音轨时，`src` 可以是一个生成采样的函数：
 
 ```ts
 const tone: AudioSource = {
@@ -102,61 +155,57 @@ const tone: AudioSource = {
 }
 ```
 
-[examples/synth](../examples/synth/index.ts) 是一个完整的合成器套件：底鼓、拍手、踩镲、贝斯、铺底、supersaw、各类冲击和过渡音效，带混响、乒乓延迟和内部闪避。showreel 的整首配乐就是用它在代码里“写”出来的，见 [examples/showreel/audio.ts](../examples/showreel/audio.ts)。它只是示例，不是框架的一部分；正式项目更常见的做法是用真实的音频文件。
+[examples/synth](../examples/synth/index.ts) 是一个完整的合成器套件，showreel 的整首配乐就是用它写出来的，作为一个音源放进 visualtone 混音。它只是示例；新片子优先用 visualtone 的原生音轨或真实的音频文件。
 
 ## 看不到声音时怎么检查
 
-模型听不到声音，所以要靠报告和波形图来“看”。运行：
-
 ```bash
-npm run mfl -- audio examples/showreel/index.ts
+npm run mfl -- audio examples/narrated/index.ts
 ```
 
-输出 `out/showreel/showreel.wav`、`showreel.waveform.png`，并在终端打印报告：
+输出 `out/narrated/narrated.wav`、`narrated.score.json`（交给 visualtone 的乐谱）、`narrated.waveform.png`，并在终端打印报告：
 
 ```
-音频 48.00s  峰值 -0.8 dBFS  RMS -12.7 dBFS  限幅 0.30%
+音频 32.59s  响度 -16.0 LUFS  峰值 -1.6 dBFS  RMS -19.2 dBFS  限幅 1.6 dB
+  旁白：1–4 kHz 高出音乐 19.5 dB  音效 2.8 个/10s  最短间隔 0.03s
+  · voice 合计占能量 73%，盖过了 fx:shimmer 6%、pad 5%  → …
   段落            RMS    峰值
-  起笔            -22.7   -7.7   0.00–8.00s
-  几何            -12.4   -1.3   8.00–16.00s
+  intro         -17.4   -4.9   0.00–3.83s
   …
-  每秒 RMS：-49 -33 -24 -22 -20 -22 -21 -20 -10 -13 …
-  cue 跳变（dB，>3 说明这个点上有明显的声音进来）：
-    8.00s kick         +14
-    8.00s impact       +14
 ```
 
 逐项检查：
 
-1. **整体电平。** 峰值在 -1 到 -0.3 dBFS 之间；RMS 在 -16 到 -10 dBFS 之间，适合网络视频。RMS 低于 -20 dBFS 就太小声了。
-2. **限幅比例。** 低于 1%。超过就降增益。
-3. **段落起伏。** 段落 RMS 应该和画面的能量曲线一致：开场安静，主段落最响，结尾回落。如果所有段落都差不多响，说明编排缺少动态。
-4. **cue 跳变。** 每个 cue 统计前后各 50ms 的 RMS 差。冲击、底鼓这种“画面打一下”的点应该是 +3 dB 以上；接近 0 说明这个点上没有声音进来，可能漏放了音效，或者被别的声音盖住了。报告会单独列出这些点。
-5. **波形图。** 用读图工具打开 `*.waveform.png`：竖线是段落和 cue，曲线是 RMS 包络。检查包络的突起是否落在 cue 线上，淡出是否平滑地收到底。
+1. **响度。** 接近 `master.lufs`；限幅不超过 3 dB。
+2. **旁白。** 有旁白时报告按 visualtone 的 voiceover-bed 档案分析：旁白在 1–4 kHz 至少高出音乐 6 dB；音效别太密。
+3. **诊断。** ⚠ 是要处理的，· 是参考。建议里的 `size`、`eq.peaks` 等字段是 visualtone 音轨的写法，对母线就改片段的 `gain` 或母线的 `eq`。有旁白时，“旁白占能量大头”是正常的。
+4. **段落起伏。** 纯音乐片的段落 RMS 应该和画面的能量曲线一致：开场安静，主段落最响，结尾回落。
+5. **cue 跳变。** 每个 cue 统计前后各 50ms 的 RMS 差。冲击、底鼓这种“画面打一下”的点应该是 +3 dB 以上；接近 0 说明这个点上没有声音进来。旁白登记的 cue 不参与（`audit: false`）。
+6. **波形图。** 竖线是段落和 cue，曲线是 RMS 包络。检查包络的突起是否落在 cue 线上，淡出是否平滑地收到底。
 
 ## 电平参考
 
-以下是 hello 示例的实际取值，可以作为起点：
-
-| 内容 | 片段增益 |
+| 内容 | 起点 |
 | --- | --- |
-| BGM 循环 | -7 dB，进 `music` 母线，被底鼓闪避 0.55 |
-| 底鼓 | -5 dB |
-| 冲击 | -3 dB |
-| whoosh | -6 dB |
+| 旁白 | 0 dB，母线加轻压缩（ratio 2–3） |
+| 音乐铺底（有旁白） | visualtone 音轨 `size` 0.07–0.1；文件 -14 到 -10 dB；`duck` by voice，band 1–4 kHz |
+| BGM 循环（无旁白） | -7 dB，被底鼓闪避 0.55 |
+| 冲击 | -3 dB，或内置 `impact` size 0.4–0.5 |
+| whoosh | -6 dB，或内置 `whoosh` size 0.3 |
 | 打字 tick | -14 dB，声像从左扫到右 |
-| 结尾 chime | -4 dB |
-| master | 淡出 1.5 秒，限幅 -0.8 dBFS |
+| master | -16 LUFS，淡出 0.8–1.5 秒 |
 
 经验：
 
+- 有旁白时，旁白是基准，其余都往下摆。音乐在旁白说话时只是背景。
 - 音效之间要拉开层级。冲击最响，其次是底鼓和过渡音，细碎的 tick、sparkle 要低 8–12 dB。
 - 同一时刻的音效不要超过三个。冲击点上已经有 impact 和 kick 时，就不要再叠 whoosh 的尾巴。
-- 预备动作配 riser 或倒放镲片，让它在冲击点那一刻结束，而不是在冲击点之后才停。
+- 预备动作配 riser，让它在冲击点那一刻结束，而不是在冲击点之后才停。
 - 给音效加一点声像，跟着画面里物体的位置走：`pan: (x / W - 0.5) * 0.8`。
 
 ## 已知限制
 
-- 只有 dB 增益、声像、淡入淡出、闪避和限幅，没有 EQ、压缩、混响这类效果器。需要的话，在程序化音源里自己处理（参考 synth 示例的 `Biquad` 和混响），或者事先用外部工具处理好音频文件。
+- 按电平闪避只有 `by`、`depth`、`hold`、`release`、`band`；起压时间由 visualtone 固定。
+- 片段淡入淡出是线性的。
 - 解码用 ffmpeg，结果缓存在进程内。很长的音频文件会占较多内存：48kHz 立体声每分钟约 23MB。
-- 报告只是电平统计，听感的好坏需要人来判断。
+- 报告是测量和经验规则，听感的好坏需要人来判断。

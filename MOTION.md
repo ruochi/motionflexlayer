@@ -1,22 +1,55 @@
 # Motion Flex Layer：给模型的动画入口
 
-本文是给模型的入口。照着这里的四步做，产出一支带音乐和音效的视频。
+本文是给模型的入口。照着这里的流程做，产出一支带旁白、音乐和音效的视频。
 
 - **标签和属性：** flexlayer 的 [SPEC.md](https://github.com/ruochi/flexlayer/blob/main/SPEC.md)。静态写法的规则见 flexlayer 的 [AGENTS.md](https://github.com/ruochi/flexlayer/blob/main/AGENTS.md)，它们在这里同样适用。
+- **旁白：** [docs/NARRATION.md](docs/NARRATION.md)。
 - **动效手法：** [docs/RECIPES.md](docs/RECIPES.md)。
-- **音频：** [docs/AUDIO.md](docs/AUDIO.md)。
+- **音频：** [docs/AUDIO.md](docs/AUDIO.md)。声音由 [visualtone](https://github.com/ruochi/visualtone) 渲染。
 - **React 写法：** [docs/REACT.md](docs/REACT.md)。
+
+## 0. 标准输入流程
+
+拿到需求后按这个顺序走，每一步的产物都是下一步的输入：
+
+| 步骤 | 产物 | 用什么 |
+| --- | --- | --- |
+| 1. 需求（brief） | 一句话目的、观众、时长、画幅、语气、必须出现的信息 | 先写下来，不确定的地方按常识定，并在总结里说明 |
+| 2. 文案 | 每句一个 id 的旁白稿；没有旁白时写段落表 | 每句只讲一件事，中文每句 12–28 字 |
+| 3. 旁白 | 音频、逐词时间、每段时长 | `narration(lines, opts)`，结果缓存进仓库 |
+| 4. 时间轴 | 段落、cue | `vo.timeline()`；纯音乐片用 `timeline({ bpm })` |
+| 5. 画面 | `render(f)` | 节点原语 + `draw`，时间点全部取自时间轴 |
+| 6. 声音 | `audio` | 旁白进 `voice` 母线，音乐 `duck.by: 'voice'`，音效放在 cue 上 |
+| 7. 检查 | 联系表、排版报告、音频报告 | `stills` → `check` → `audio` |
+| 8. 渲染 | mp4 | `render` |
+
+时长由谁决定：
+
+- **有旁白时，旁白决定时长。** 不要先定“每段 4 秒”再让旁白去凑。先念，再按念出来的长度排段落；画面要多停一会儿，用 `minDuration` 或 `post` 加。
+- **没有旁白时，音乐决定时长。** 先定 BPM，段落落在小节线上。
+- 两者都有时，段落仍按旁白排；音乐的和弦或乐句按段落起止编排，见 `examples/narrated`。
+
+### 别让每支片子都一个样
+
+框架不带任何视觉风格。示例只是演示写法，不是模板。每支片子的风格从需求里来：
+
+- **先定三件事再写代码：** 色板（3–5 个颜色，写成常量）、字体与字重层级、运动语汇（干脆利落的硬切，还是柔和的弹簧，还是缓慢的推移）。三件事都要能用需求里的一句话解释。
+- **不要照搬示例的配色和版式。** 深底加青橙光效是 showreel 的风格，米色纸面加红色强调是 narrated 的风格。新片子要换掉。
+- **转场方式跟着内容变：** 列举用逐项入场，对比用分屏，因果用连线或推镜，数字用滚动计数。全片只用一种淡入淡出，就会显得单调。
+- **声音也一样：** 和弦进行、音色（`hue`、`engine`）、音效选择都按语气定。轻松的片子用 `pluck` / `marimba` 和 `pop`，严肃的用 `wavetable` 铺底和 `swell`。
 
 ## 1. 心智模型
 
 一支视频就是一个**纯函数**：`t（秒）→ 一帧 flexlayer 文档`。没有“上一帧”，没有状态。
 
 ```text
-时间轴（节拍、段落、cue）
-   ├── 帧函数：render(f) → layer 树      画面
-   └── 音频：clips 放在同样的 cue 上      声音
+文案 → 旁白（TTS，缓存）
            ↓
-   stills / check / audio 报告            验证
+时间轴（段落、cue、逐词时间；或节拍）
+   ├── 帧函数：render(f) → layer 树          画面（可读 f.audio 的电平和起音）
+   └── 音频：AudioSpec → visualtone 乐谱      声音（渲染一次，算出包络）
+           ↓
+   stills / check / audio 报告                验证
            ↓
    render：N 个进程 → ffmpeg → mp4
 ```
@@ -26,7 +59,8 @@
 | 结构 | `layer`、HTML 文字、`div` 的 flex，以及 `place` / `camera` / `roll` / `reveal` / `typewriter` | 有哪些东西、在哪、什么时候出现、怎么排 |
 | 像素 | `draw` 回调：`fx()` 或任意自定义标签 | 笔触、粒子、光效、数据图、3D 点云 |
 | 时间 | `timeline()`、`progress` / `fade` / `spring` / `pulse` / `stagger` | 一切数值随 t 变化 |
-| 声音 | `audio.clips`、`buses`、`duck` | 文件或合成器放到 cue 上，混音 |
+| 声音 | `audio.clips`、`buses`、`duck`、`tracks` | 旁白、音乐、音效放到 cue 上，由 visualtone 混音 |
+| 旁白 | `narration()`、`vo.caption(t)` | 合成语音，排出段落，逐词字幕 |
 
 ## 2. 硬性约定
 
@@ -36,6 +70,7 @@
 | 帧函数必须是纯函数 | `Math.random()`、`Date.now()`、在 render 里改模块变量、`pos += vel` | `rng(seed)`、`hash(i, seed)`、解析式，或预计算的表 | 多进程乱序渲染，画面会抖动、闪烁 |
 | 重计算放进 `setup` | 每帧跑一次粒子模拟、采样文字 | `setup` 里按固定频率模拟，帧函数里查表插值 | 每帧慢几百毫秒 |
 | 所有时间点都来自时间轴 | 画面写 `4.0`，音效写 `4.02` | `tl.cue('impact', tl.bar(2))`，两边都读 `tl.times('impact')` | 声音和画面对不上 |
+| 定位用 `x`、`y`、`anchor` | `h('layer', { cx: 960, cy: 540 })` | `place({ x: 960, y: 540 })`（默认 `anchor: 'center'`），原始节点写 `h('layer', { x: 960, y: 540, anchor: 'center' })` | flexlayer 0.2 起 `cx`、`cy` 在 layer 上无效，报 `invalid-attr` |
 | 嵌套 `layer` 只定位，不排版 | 一个 `layer` 里并排放两段文字 | `place({…}, box({ display: 'flex', gap: 12 }, a, b))` | 文字叠在一起，报 `text-overlap` |
 | 嵌套 `layer` 不填背景 | `h('layer', { background: '#fff' })` | 用 `rect`、HTML `background` 或 `draw` | `invalid-attr` |
 | 镜头里不放 `blur` / `mask` / `grade` / `glass` | `camera({ zoom: 16 }, reveal(…))` | 带这些效果的元素放到镜头外，或者在 zoom 不大的时候用 | 离屏画布按放大后的尺寸分配，单帧可能慢到几百毫秒 |
@@ -45,13 +80,32 @@
 | `draw` 里不分配大对象 | 每帧 `createCanvas(1920, 1080)` | 在模块顶层或 `setup` 里建好，复用 | 内存上涨，越来越慢 |
 | 看不见的元素就不输出 | 透明度为 0 的层仍然放进文档 | `place()` 在透明度约为 0 时返回 `null`；条件渲染写 `cond && node` | 白白排版、绘制 |
 | React 里每帧都是新挂载 | 用 `useState` / `useEffect` 存动画状态 | 只用 `useFrame()` 和纯计算，`useMemo` 只做帧内去重 | 状态每帧丢失 |
-| 音量看报告，不靠猜 | 直接把增益都设成 0 dB | 跑 `audio` 命令，限幅比例低于 1%，各段 RMS 有起伏 | 削波，或者全片一样响 |
+| 预期中的问题写 `expect` | 整个合成 `lint.ignore: ['text-overlap']` | 在那个元素上写 `attrs: { expect: 'text-overlap: 交叉淡化' }` | 真正的 bug 被一起忽略 |
+| 音量看报告，不靠猜 | 直接把增益都设成 0 dB | 跑 `audio` 命令：响度 -16 LUFS 左右，有旁白时“旁白高出音乐”≥ 6 dB，没有 ⚠ | 削波、旁白听不清，或者全片一样响 |
+| 旁白文字和字幕是同一份 | 字幕另写一遍 | 字幕用 `vo.caption(f.t)` | 改了文案，字幕和声音对不上 |
 
-## 3. 四步工作流
+## 3. 工作流
 
 ### 第一步：时间轴
 
-先定节奏，再定画面。BPM 决定一切时间点：120 BPM 时一拍 0.5 秒、一小节 2 秒，4 小节（8 秒）一段。
+**有旁白时，**先写文案，念出来，再从旁白生成时间轴：
+
+```ts
+import { narration } from 'motionflexlayer'
+
+const vo = await narration(
+  [
+    { id: 'hook', text: '一句话说清楚这支片子要讲什么。' },
+    { id: 'how', text: '第二句展开，画面跟着这一句变化。', minDuration: 4 },
+  ],
+  { baseDir: import.meta.url, voice: 'zh-CN-XiaoxiaoNeural' },
+)
+const tl = vo.timeline()          // 每句一段，段名就是 id；另有 'line'、'word' 两组 cue
+```
+
+模块顶层可以直接 `await`。旁白缓存在入口旁边的 `voice/` 目录，提交进仓库，渲染时不再联网。详见 [docs/NARRATION.md](docs/NARRATION.md)。
+
+**没有旁白时，**先定节奏，再定画面。BPM 决定一切时间点：120 BPM 时一拍 0.5 秒、一小节 2 秒，4 小节（8 秒）一段。
 
 ```ts
 import { timeline } from 'motionflexlayer'
@@ -96,21 +150,43 @@ export default defineComposition({
 - 返回数组里可以有 `null` / `false`；
 - 结构用节点原语，像素用 `fx` 的 `draw`。
 
+字幕直接读旁白：
+
+```ts
+const c = vo.caption(f.t)        // { line, spoken, word, progress, speaking }
+// line.text.slice(0, spoken) 是念过的部分，word 是正在念的词
+```
+
+画面要跟着声音动（电平表、随旁白跳动的波形、音效起音时闪一下），在合成上写 `envelopes: true`，帧函数里读 `f.audio`：
+
+```ts
+f.audio!.level('voice')            // 旁白此刻的 RMS 电平，线性
+f.audio!.since('fx')               // 距上一个音效起音多少秒
+f.audio!.at(f.t - 0.5).db('music') // 半秒前音乐的电平，画历史曲线用
+```
+
+包络在渲染前算好一次，仍然是 t 的纯函数。
+
 ### 第三步：音频
 
 ```ts
 audio: ({ tl }) => ({
   clips: [
+    ...vo.clips(),                                                       // 旁白，进 'voice' 母线
     { src: 'music/bed.wav', loop: true, gain: -8, fadeIn: 1, bus: 'music' },
-    ...sfx('sfx/kick.wav', tl.times('kick'), { gain: -5 }),
     ...sfx('sfx/impact.wav', tl.times('impact'), { gain: -3 }),
   ],
-  buses: { music: { duck: { times: tl.times('kick'), depth: 0.5 } } },   // 音乐给底鼓让路
-  master: { fadeOut: 1.5, limit: -0.8 },
+  buses: {
+    music: { duck: { by: 'voice', depth: 0.6, band: [1000, 4000] } },   // 旁白说话时，音乐让出人声频段
+  },
+  tracks: [                                                              // visualtone 原生音轨：音符、内置音效
+    { id: 'fx', role: 'sfx', sfx: [{ sfx: 'whoosh', t: tl.at('how') - 0.2 }] },
+  ],
+  master: { lufs: -16, fadeOut: 1.5 },
 })
 ```
 
-文件路径相对于合成入口所在的目录。音源也可以是函数，例如程序化合成器，见 [docs/AUDIO.md](docs/AUDIO.md)。
+文件路径相对于合成入口所在的目录。混音由 visualtone 完成：响度按 LUFS 对齐、限幅器兜底、同样输入同样输出。音源也可以是函数（程序化合成器），见 [docs/AUDIO.md](docs/AUDIO.md)。
 
 ### 第四步：验证，由轻到重
 
@@ -129,16 +205,18 @@ npm run mfl -- render comp.ts                 # 成片
 2. **关键时刻：** 每个 cue 的前一帧（蓄势）、当帧（命中）、后 0.1 秒（余韵）各看一张，确认命中的那一帧确实最强。
 3. **`check`：** 没有 error。warn 逐条判断，对照第 5 节的表。
 4. **`audio`：**
-   - 限幅比例低于 1%；
-   - 各段 RMS 有起伏，高潮比开场响 6–10 dB；
-   - 每个重要 cue 的“跳变”大于 3 dB，说明这个点上确实有声音进来；
+   - 响度接近目标（默认 -16 LUFS），限幅不超过 3 dB；
+   - 有旁白时，“旁白：1–4 kHz 高出音乐”至少 6 dB，音效每 10 秒不超过 visualtone 档案的上限；
+   - 报告里的 ⚠ 逐条处理，· 酌情处理；
+   - 纯音乐片：各段 RMS 有起伏，高潮比开场响 6–10 dB；每个重要 cue 的“跳变”大于 3 dB；
    - 打开波形图看包络，确认它和画面节奏一致。
 5. **成片：** 用 ffmpeg 抽几帧，和 stills 对比，确认多进程渲染的结果和单帧一致。
 
 模型听不到声音，所以音频的“好听”只能靠结构来保证：
 
 - 节拍对齐：音效都放在 cue 上；
-- 层次：鼓、音乐、音效分开母线，音乐给底鼓让路；
+- 层次：旁白、音乐、音效分开母线，音乐给旁白和底鼓让路；
+- 频段：旁白占 1–4 kHz，音乐别去填这一段；
 - 动态：各段电平有起伏；
 - 最后在总结里如实告诉用户，这一点你没法亲耳确认。
 
@@ -169,12 +247,20 @@ npm run mfl -- render comp.ts                 # 成片
 - 创建：`timeline({ bpm, beatsPerBar, offset, duration })`。
 - 拍和小节换算成秒：`.beat(n)`、`.bar(n, beat)`、`.beats(from, to, step)`、`.grid(fromSec, toSec, step)`。
 - 秒换算成拍：`.beatAt(t)`、`.snap(t, division)`。
-- 登记：`.cue(name, t | t[], data)`、`.section(name, from, data)`。
+- 登记：`.cue(name, t | t[], data)`、`.section(name, from, data)`。cue 的 data 写 `audit: false`，音频报告就不检查它（旁白的 cue 默认如此）。
 - 读取：`.times(name)`、`.at(name)`、`.cues(name)`、`.last(name, t)`、`.sectionAt(t)`。
+
+**旁白：**
+
+- `narration(lines, { baseDir, voice, rate, cacheDir, offline, lead, gap, hold, tail })`：合成并排期，返回 `Narration`。
+- `vo.lines`：每句的 `from`/`to`（段落）、`speechFrom`/`speechTo`（开口、收声）、`words`（逐词时间和字符位置）。
+- `vo.timeline({ bpm })` / `vo.apply(tl)`：登记段落和 cue。
+- `vo.caption(t)`：字幕读数。`vo.clips({ bus, gain })`：旁白片段。`vo.line(id)`、`vo.lineAt(t)`、`vo.words`。
+- `edgeTts`、`synthesizeCached`：TTS 引擎和缓存，换引擎实现 `TtsEngine` 即可。
 
 **节点：**
 
-- `place({ x, y, anchor, opacity, rotate, scale, origin, width, height, attrs }, ...children)`：定位一组内容。
+- `place({ x, y, anchor, opacity, rotate, scale, origin, width, height, attrs }, ...children)`：定位一组内容。`anchor` 默认 `center`；`attrs` 里可以写 `expect`、`glow`、`overflow` 等。
 - `text(str, style)`：单行文字。
 - `box(style, ...children)`：flex 容器。
 - `fx({ width, height, x, y, name }, draw)`：绘图层。
@@ -205,33 +291,40 @@ npm run mfl -- render comp.ts                 # 成片
 
 **音频：**
 
-- `AudioSpec { clips, buses, master }`：混音描述。
+- `AudioSpec { clips, buses, tracks, master, bpm }`：混音描述，编译成 visualtone 乐谱。
 - `sfx(src, times, opts)`：同一个音效放在一组时间点上。
-- `mixAudio(spec, { duration })`：直接混音。
-- `renderAudio(comp, file)`：混成 WAV，同时给出报告。
+- `mixAudio(spec, { duration, envelopeFps, stems })`：直接混音。`compileAudio(spec)` 只编译不渲染。
+- `renderAudio(comp, file)`：混成 WAV，同时给出报告和乐谱。
+- `f.audio`（合成写 `envelopes: true`）：`level(track)`、`db(track)`、`onsets(track)`、`since(track)`、`at(t)`。
 - `analyzeAudio`、`formatAudioReport`、`drawWaveform`：电平分析和波形图。
 
 **渲染：**
 
-- `renderFrame(comp, t, { scale })`：渲染一帧。
+- `renderFrame(comp, t, { scale })`：渲染一帧（PNG）。`renderRgba(comp, frame, { scale })`：原始像素。
 - `renderStills(comp, times, { outDir })`：静帧加联系表。
 - `renderVideo({ entry, out, workers, fps, scale, from, to })`：多进程渲染视频。
 - `loadComposition(path)`：按路径加载合成。
 
 ## 5. 问题码在视频里怎么处理
 
-问题码来自 flexlayer 的报告。多帧汇总后，每条都会给出出现了几帧、首末时间。在合成上配置 `lint: { ignore: [...] }` 可以忽略某类问题。
+问题码来自 flexlayer 的报告。多帧汇总后，每条都会给出出现了几帧、首末时间。
+
+预期中的问题写在那个元素上：`place({ …, attrs: { expect: 'overflow-canvas: 入场前停在画外' } })`。命中的问题降为 info；写了却没出现，报 `unused-expect`，所以 expect 要和实际情况一起开关（例如只在重叠的那几帧写）。整类忽略用合成上的 `lint: { ignore: [...] }`，只用于 `min-font-size` 这类阈值不适合视频的规则。
+
+推镜、震屏让整页出血时，在合成上写 `root: { bleed: 1 }`，不再报 `overflow-canvas`。
 
 | 问题码 | 级别 | 视频里的处理 |
 | --- | --- | --- |
 | `overflow-canvas` | error | 震屏、推镜、入场前停在画外时出现，属于正常情况，可以忽略。但如果它出现在**静止段落**的文字上，就是真的越界，要修 |
 | `min-font-size` | warn | 阈值按海报计算，横屏 1080p 下是 42.7px，偏严，可以忽略。视频里正文不小于 28px，HUD 和角标不小于 18px |
 | `outside-safe` | warn | 推镜放大时出现，属于正常。静止段落的标题出现这个问题要修 |
-| `text-overlap` | warn | 几乎总是 bug：常见原因是一个 layer 里放了两段文字却没有用 flex。交叉淡入淡出时短暂重叠可以接受 |
+| `text-overlap` | warn | 几乎总是 bug：常见原因是一个 layer 里放了两段文字却没有用 flex。交叉淡入淡出时短暂重叠可以接受，在先画的那个元素上写 `expect` |
+| `unused-expect` | warn | 写了 `expect` 但这一帧没出现。把 expect 的开关条件改准 |
+| `ink-inset` | info | 字形比盒子靠里。要让笔画贴齐定位点，写 `anchor-box="ink"` |
 | `effect-clipped` | warn | 光晕被画布切掉。如果是边缘的装饰，可以忽略；如果是主体，就往里移 |
 | `invalid-attr` / `invalid-child` / `unknown-tag` | warn/error | 写法错误，按 flexlayer 的 AGENTS.md 修改 |
 
-flexlayer 的改动方案（视频检查配置、`bleed` 属性等）见 [docs/FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)。
+还需要 flexlayer 配合的改动见 [docs/FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)。
 
 ## 6. 动效的基本功
 
@@ -242,16 +335,17 @@ flexlayer 的改动方案（视频检查配置、`bleed` 属性等）见 [docs/F
 - **错开：** 一组元素同时出现会显得死板。用 `stagger(i, n, { each: 0.04–0.08, from: 'center' })` 错开。
 - **预备和余韵：** 大动作前先反向收一下（蓄势），命中后让次要元素晚 50–100ms 跟上（跟随）。
 - **冲击三件套：** 同一个 cue 上同时做闪白（`pulse` 驱动亮度或 `glowDot`）、震屏（`wiggle × pulse`）、轻微缩放（zoom +3–6%）。再配上音频的冲击声和音乐闪避。
+- **跟着旁白：** 画面的变化落在关键词的开口时刻（`vo.line(id).words.find(…).from`），而不是段落开头。观众听到“重叠”时，画面上正好出现重叠。
 - **层次：** 背景慢（周期 4–8 秒），主体中速，粒子和光点快。不同层的运动周期不同，画面才有纵深。
 - **留白：** 每段结尾留 0.3–0.5 秒让画面停住，再进下一段。
 
 ## 7. 性能参考
 
-以下数据来自 M 系列芯片，1920×1080，`scale` 为 1：
+以下数据来自 4 核云主机，1920×1080，`scale` 为 1：
 
-- **1080p 的 PNG 编码一帧约 300ms，比绘制本身慢得多。** showreel 的帧绘制只要几十毫秒，加上 PNG 编码就要约 300ms。
-- `render` 命令不编码 PNG：它把原始像素直接交给 ffmpeg（`src/render/raw.ts`），单帧快约 10 倍，画面完全一致。48 秒、60fps 的 showreel 共 2880 帧，7 个进程并行，用时约 90 秒。改用原始像素之前，同样的渲染要 300 秒。
-- `stills` 和 `check` 仍然输出 PNG，单帧约 300ms。所以抽帧检查时，`--every` 不要设得太密。
+- `render` 用 flexlayer 的 `renderFrames({ format: 'rgba' })` 取原始像素直接交给 ffmpeg，不编码 PNG。narrated 示例（32.6 秒、30fps、978 帧）4 个进程约 28 秒，其中约 17 秒是先混音算包络。
+- `stills` 和 `check` 仍然输出 PNG，1080p 单帧可能要几百毫秒。抽帧检查时，`--every` 不要设得太密；`check` 默认 `--scale 0.25`。
 - 推镜放大很多倍时，带 `mask`、`blur`、`filter` 的元素会变慢：16 倍时，一张带 mask 的卡片单帧多出约 190ms。
-- 草稿用 `--scale 0.5 --fps 30`，像素量是成片的四分之一，帧数减半。
+- 草稿用 `--scale 0.5 --fps 30`，像素量是成片的四分之一。
 - 预计算放进 `setup`：每个进程只跑一次。
+- 旁白第一次合成要联网，之后读缓存；`MFL_TTS_OFFLINE=1` 时缓存缺失直接报错。

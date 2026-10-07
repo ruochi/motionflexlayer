@@ -151,7 +151,7 @@ render: (f) => [background(f), ...overlay(f), post(f)]
 
 ## 小写标签和类型
 
-小写标签就是 flexlayer 的元素：`layer`、`fx`（也可以用任意自定义名字，例如 `<bars draw={…}>`，它在报告里更容易认出来）、`div`、`p`、`h1`、`span`、`rect`、`circle`、`path`、`mask`、`font` 等。属性名和 flexlayer markup 相同，例如 `cx`、`cy`、`origin`、`overflow`、`glow`。类型定义在 `src/react/jsx.ts`。
+小写标签就是 flexlayer 的元素：`layer`、`fx`（也可以用任意自定义名字，例如 `<bars draw={…}>`，它在报告里更容易认出来）、`div`、`p`、`h1`、`span`、`rect`、`circle`、`path`、`mask`、`font` 等。属性名和 flexlayer markup 相同，例如 `x`、`y`、`anchor`、`origin`、`overflow`、`glow`。类型定义在 `src/react/jsx.ts`。
 
 属性值的转换规则：
 

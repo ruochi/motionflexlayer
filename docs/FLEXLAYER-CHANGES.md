@@ -4,52 +4,30 @@
 
 motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做法。改完一项，motionflexlayer 删一段绕路代码。
 
-优先级：
+**状态核对于 flexlayer 0.2.18（c77b413）。** 第 1、8 项已完成，motionflexlayer 0.2 已删掉对应的绕路代码；第 4 项部分完成。另外 flexlayer 新增的 `expect`、`data`、行内元素进报告、`flex-wrap`、`anchor-box="ink"` 都已在 motionflexlayer 里用上。
 
-- **P0**：打包和公共接口。不改的话，motionflexlayer 发布不了，只能本地 `file:../flexlayer` 联调。第 8 项也列为 P0：它的临时做法依赖 flexlayer 的内部实现，flexlayer 一改就可能失效。
-- **P1**：动画质量和性能。现在靠绕路实现，代价是代码复杂或渲染变慢。
-- **P2**：锦上添花。
-
-| # | 优先级 | 改动 | motionflexlayer 里受影响的代码 |
-| --- | --- | --- | --- |
-| 1 | P0 | 打包：`prepare` + `files` | `package.json` 依赖写法 |
-| 2 | P0 | 导出字体与 canvas | `src/canvas.ts` 整个文件 |
-| 3 | P0 | `draw` 的 ctx 类型补全 | `src/render/stills.ts` 里 `drawImage` 的强转 |
-| 4 | P1 | 动画用的检查配置：`bleed`、视频字号阈值 | 示例里的 `lint.ignore` |
-| 5 | P1 | `origin` 支持任意点 | `src/nodes.ts` 的 `camera()` |
-| 6 | P1 | 离屏画布按可见区域裁剪 | `MOTION.md` 里“镜头里别放 blur / mask”这条规则 |
-| 7 | P1 | 行内 `span` 的变换与透明度 | `src/drawkit.ts` 的 `drawGlyphs`（保留，但标题类不再需要） |
-| 8 | P0 | 原始像素输出（PNG 编码占单帧 80–95%） | `src/render/raw.ts` 整个文件（拦截 `toBuffer` 的垫片） |
-| 9 | P1 | 成组透明度 | 无（现在没有绕路，只能接受瑕疵） |
-| 10 | P2 | `draw` 里查询其它元素的盒子 | 示例里手算的坐标 |
-| 11 | P2 | 秒为单位的 `spring` | 无（motionflexlayer 自带） |
-| 12 | P2 | 层效果：`bloom`、`chroma` | 示例里在 draw 里手画的光晕 |
+| # | 优先级 | 改动 | 状态 | motionflexlayer 里受影响的代码 |
+| --- | --- | --- | --- | --- |
+| 1 | P0 | 打包：`prepare` + `files` | ✅ 已完成 | 依赖已改成 `github:ruochi/flexlayer#<commit>` |
+| 2 | P0 | 导出字体与 canvas | 未做 | `src/canvas.ts` 整个文件 |
+| 3 | P0 | `draw` 的 ctx 类型补全 | 未做 | `src/render/stills.ts` 里 `drawImage` 的强转 |
+| 4 | P1 | 动画用的检查配置：`bleed`、视频字号阈值 | 部分：根上 `bleed`、元素上 `expect` 已有；嵌套 layer 的 `bleed`、视频字号阈值没有 | 示例里的 `lint.ignore: ['min-font-size']` |
+| 5 | P1 | `origin` 支持任意点 | 未做 | `src/nodes.ts` 的 `camera()` |
+| 6 | P1 | 离屏画布按可见区域裁剪 | 未核实 | `MOTION.md` 里“镜头里别放 blur / mask”这条规则 |
+| 7 | P1 | 行内 `span` 的变换与透明度 | 未做（文字整段可以 `style="scale:…"`） | `src/drawkit.ts` 的 `drawGlyphs` |
+| 8 | P0 | 原始像素输出 | ✅ 已完成：`renderFrames({ format: 'rgba' })` | `src/render/raw.ts` 已删除 |
+| 9 | P1 | 成组透明度 | 未做 | 无（现在没有绕路，只能接受瑕疵） |
+| 10 | P2 | `draw` 里查询其它元素的盒子 | 未做 | 示例里手算的坐标 |
+| 11 | P2 | 秒为单位的 `spring` | 未做 | 无（motionflexlayer 自带） |
+| 12 | P2 | 层效果：`bloom`、`chroma` | 未做 | 示例里在 draw 里手画的光晕 |
+| 13 | P1 | 单帧取原始像素、异步帧函数 | 新增 | `src/render/frame.ts` 的 `renderRgba` |
+| 14 | P2 | `renderFrames` 的 `t` 由调用方给 | 新增 | 无 |
 
 ---
 
-## 1. 打包：`prepare` + `files`（P0）
+## 1. 打包：`prepare` + `files`（P0，✅ 已完成）
 
-**问题。** `package.json` 的 `main` 指向 `dist/`，但 `dist` 在 `.gitignore` 里。也没有 `files` 字段，npm 打包时就按 `.gitignore` 把 `dist` 排除。结果是：
-
-- `npm install github:ruochi/flexlayer` 装下来没有 `dist`，导入直接失败；
-- `npm install --install-links ../flexlayer` 同样拿不到 `dist`。
-
-**建议。**
-
-```json
-{
-  "files": ["dist", "SPEC.md", "AGENTS.md", "docs"],
-  "scripts": {
-    "prepare": "npm run build"
-  }
-}
-```
-
-npm 安装 git 依赖时会执行 `prepare`，自动构建。
-
-**motionflexlayer 改完后。** 依赖从 `"flexlayer": "file:../flexlayer"` 改成 `"github:ruochi/flexlayer#<tag>"`，或者等 flexlayer 发布到 npm 后改成版本号。
-
-**验收。** 在一个空目录里执行 `npm i github:ruochi/flexlayer`，然后 `node -e "import('flexlayer').then(m => console.log(typeof m.renderFvg))"` 输出 `function`。
+flexlayer 现在有 `prepare` 和 `files`，`npm install github:ruochi/flexlayer` 会自动构建。motionflexlayer 的依赖已改成 `"flexlayer": "github:ruochi/flexlayer#<commit>"`，不再要求两个仓库放在同一级目录。
 
 ## 2. 导出字体与 canvas（P0）
 
@@ -111,7 +89,7 @@ export type DrawContext = Parameters<DrawFn>[0]
 (a) `layer` 增加属性 `bleed`。子树允许越出画布，越出时不报 `overflow-canvas` 和 `outside-safe`，但 `effect-clipped` 照报。
 
 ```html
-<layer bleed cx="960" cy="540" width="3840" height="2160" scale="2.4">…</layer>
+<layer bleed x="960" y="540" anchor="center" width="3840" height="2160" scale="2.4">…</layer>
 ```
 
 motionflexlayer 的 `camera()` 会自动加上 `bleed`。
@@ -137,8 +115,8 @@ renderFvg(node, { t, profile: 'video' })
 
 ```ts
 // motionflexlayer 现在的 camera()：两层 layer
-h('layer', { cx: W / 2, cy: H / 2, width: W * 2, height: H * 2, scale: zoom },
-  h('layer', { cx: W - x, cy: H - y, anchor: 'top-left', width: W, height: H }, ...children))
+h('layer', { x: W / 2, y: H / 2, anchor: 'center', width: W * 2, height: H * 2, scale: zoom },
+  h('layer', { x: W - x, y: H - y, width: W, height: H }, ...children))
 ```
 
 这种写法能用，但不直观，而且模型自己写的时候很容易把偏移量算错。
@@ -152,7 +130,7 @@ h('layer', { cx: W / 2, cy: H / 2, width: W * 2, height: H * 2, scale: zoom },
 
 数字是 layer 自身坐标系里的位置。九宫格写法保留。
 
-**motionflexlayer 改完后。** `camera()` 变成一层：`h('layer', { cx, cy, width: W, height: H, origin: \`${x} ${y}\`, scale, rotate, bleed })`。
+**motionflexlayer 改完后。** `camera()` 变成一层：`h('layer', { x: W / 2, y: H / 2, anchor: 'center', width: W, height: H, origin: \`${x} ${y}\`, scale, rotate })`。
 
 **验收。** `origin="1160 575" scale="2"` 渲染出来，(1160, 575) 处的像素在缩放前后保持不动。
 
@@ -195,32 +173,11 @@ h('layer', { cx: W / 2, cy: H / 2, width: W * 2, height: H * 2, scale: zoom },
 
 **验收。** 带 `translate` 的 span 和不带时排版结果（`lines[].box`）一致；渲染出的字形整体平移了指定的距离。
 
-## 8. 原始像素输出（P0，性能）
+## 8. 原始像素输出（P0，✅ 已完成）
 
-**问题。** `renderFvg` 每帧都会把画布编码成 PNG（`paint.ts` 末尾的 `canvas.toBuffer('image/png')`）。视频管线不需要 PNG，ffmpeg 收到以后还得再解码一次。实测 1080p 下：
+flexlayer 的 `renderFrames(comp, { format: 'rgba' })` 直接给出不预乘的 RGBA，不再编码 PNG。motionflexlayer 删掉了拦截 `toBuffer` 的垫片（`src/render/raw.ts`），worker 改用 `renderRgba()`，见第 13 项。
 
-| showreel 的帧 | 单帧总耗时 | 其中 PNG 编码 |
-| --- | --- | --- |
-| 16.4s（粒子爆开） | 315ms | 301ms |
-| 33s（3D 点云） | 388ms | 309ms |
-| 42.5s（落款） | 290ms | 272ms |
-
-同一张画布：`toBuffer('image/png')` 约 304ms，`data()` 取原始像素 0.7ms，`toBuffer('image/jpeg', 95)` 约 9ms。**PNG 编码占单帧耗时的 80–95%，绘制本身只占几十毫秒。**
-
-**建议。**
-
-```ts
-const { pixels, width, height, report } = await renderFvg(node, { t, format: 'rgba' })
-// pixels: Buffer，长度 width × height × 4；写明是否预乘 alpha
-```
-
-**motionflexlayer 里的临时做法。** `src/render/raw.ts` 在渲染期间改写 `@napi-rs/canvas` 画布原型上的 `toBuffer`，拦截 `'image/png'` 调用，返回空 Buffer，同时用 `this.data()` 取走像素。worker 再以 `-f rawvideo -pix_fmt rgba` 喂给 ffmpeg。这个做法依赖 flexlayer 内部的实现细节，改完后删除 `raw.ts`。
-
-实测同一批 16 帧，在同一进程里交替渲染：PNG 方式 605ms/帧，原始像素 52ms/帧，快 11.6 倍。这次测量时机器负载很高，绝对值偏大，比例可信。两种管线渲出的 showreel 逐帧 PSNR 为 inf，即像素完全一致。showreel 全片（2880 帧，7 个进程）从 300 秒降到 90 秒。
-
-**之后可以做的。** 运动模糊：每帧渲染 N 个子帧，在 JS 里平均。现在每个子帧都要编码一次 PNG，代价太高，做不了。
-
-**验收。** `format: 'rgba'` 的输出和 PNG 解码后的像素一致；单帧耗时不再包含编码。
+**之后可以做的。** 运动模糊：每帧渲染 N 个子帧，在 JS 里平均。原始像素出来以后代价可以接受了。
 
 ## 9. 成组透明度（P1）
 
@@ -258,6 +215,31 @@ draw: (ctx, el) => {
 <layer chroma="2">           <!-- 红蓝通道错开的像素数 -->
 ```
 
+## 13. 单帧取原始像素、异步帧函数（P1，新增）
+
+**问题。** 原始像素只能从 `renderFrames` 拿，而它要求 `component` 是同步函数。motionflexlayer 的帧函数可以是异步的（React 适配、按需加载数据），所以现在每一帧都要先求出节点树，再临时包一个只含这一帧的 composition 交给 `renderFrames`：
+
+```ts
+// src/render/frame.ts
+const node = await nodeAt(comp, frame / comp.fps)
+const frames = renderFrames({ …, durationInFrames: frame + 1, component: () => node }, { from: frame, to: frame, format: 'rgba' })
+```
+
+能用，但绕了一圈，每帧还要走一遍 `prepareAssets`。
+
+**建议。** 二选一：
+
+- `renderFvg(node, { t, frame, fps, format: 'rgba' })` 直接返回 `{ rgba, width, height, report }`；
+- 或者 `Composition.component` 允许返回 `Promise<FvgNode>`。
+
+**motionflexlayer 改完后。** `renderRgba` 变成一行调用。
+
+**验收。** 同一棵节点树，`format: 'rgba'` 的像素和 `renderFrames` 给出的一致。
+
+## 14. `renderFrames` 的 `t` 由调用方给（P2，新增）
+
+`renderFrames` 用 `frame / fps` 算 `t`。motionflexlayer 的草稿模式会改 fps（60 改成 30），时间仍然对，但如果以后要做子帧（运动模糊），需要在同一帧号下传不同的 `t`。建议 `RenderFramesOptions` 加 `times?: number[]`，或者第 13 项的单帧接口接受任意 `t`。
+
 ---
 
 ## 不需要 flexlayer 改的
@@ -266,6 +248,8 @@ draw: (ctx, el) => {
 
 - 时间轴、节拍、cue、段落；
 - 镜头、震屏、滚动、擦除、打字机这些原语；
-- 多进程渲染、ffmpeg、音频混音；
+- 多进程渲染、ffmpeg；
+- 旁白合成与排期；
+- 音频混音（由 visualtone 负责）；
 - React 适配：motionflexlayer 用 `react-reconciler` 直接产出 `FvgNode`，`draw` 闭包原样保留，不走 `generate/react` 的字符串序列化；
 - 第二版的 Vue 适配：同样用 `@vue/runtime-core` 的自定义渲染器直接产出 `FvgNode`。
