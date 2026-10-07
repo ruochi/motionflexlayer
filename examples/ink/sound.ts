@@ -34,6 +34,8 @@ function pad(): Track[] {
     release: 1100,
     notes: [],
     duck: { by: 'voice', amount: 0.7, band: [900, 4200], holdMs: 260 },
+    // 让出 impact 的中频，低频交给 bass
+    eq: { lowShelf: { freq: 160, gain: -5 }, peaks: [{ freq: 546, gain: -3, q: 1 }] },
   }
   const bass: Track = { id: 'bass', role: 'music', hue: 20, lightness: 0.28, release: 500, notes: [] }
   for (const l of Object.values(L)) {
@@ -44,7 +46,7 @@ function pad(): Track[] {
       const len = Math.min(2.8, end - t + 0.4)
       tones.forEach((y, j) => keys.notes!.push({ t: t + j * 0.04, y: y + 12, size: k === 0 ? 0.09 : 0.06, duration: len, ease: 'exp' }))
     }
-    bass.notes!.push({ t: l.from, y: tones[0]! - 12, size: 0.02, duration: Math.max(0.6, end - l.from), ease: 'hold' })
+    bass.notes!.push({ t: l.from, y: tones[0]! - 12, size: 0.006, duration: Math.max(0.6, end - l.from), ease: 'hold' })
   }
   return [keys, bass]
 }
@@ -64,7 +66,7 @@ function plucks(): Track {
     last = t
     notes.push({ t, y: PENTA[PENTA.length - 1 - (i % PENTA.length)]!, size: 0.035, duration: 0.4, ease: 'exp' })
   })
-  return { id: 'pluck', role: 'music', engine: 'pluck', hue: 50, lightness: 0.6, space: 0.4, echo: 0.25, pan: -0.2, notes }
+  return { id: 'pluck', role: 'music', engine: 'pluck', hue: 50, lightness: 0.75, space: 0.4, echo: 0.25, pan: -0.2, notes }
 }
 
 /** 三行字对齐、三个名字出现：木琴，按主和弦往上。 */
@@ -74,7 +76,7 @@ function marimba(): Track {
     ...NAME_TIMES.map((t, i) => ({ t, y: [62, 66, 69][i]!, size: 0.1, duration: 1.2, ease: 'exp' as const })),
     { t: T_END_SEAL, y: 74, size: 0.12, duration: 2.0, ease: 'exp' },
   ]
-  return { id: 'marimba', role: 'music', engine: 'marimba', hue: 35, lightness: 0.5, space: 0.5, pan: 0.15, notes }
+  return { id: 'marimba', role: 'music', engine: 'marimba', hue: 35, lightness: 0.65, space: 0.5, pan: 0.15, notes }
 }
 
 type SfxEvent = NonNullable<Track['sfx']>[number]
@@ -84,25 +86,24 @@ const pan = (x: number) => (x / W) * 1.2 - 0.6
 function effects(): Track {
   const sfx: SfxEvent[] = [
     { sfx: 'shimmer', t: 0.4, size: 0.25 },
-    { sfx: 'impact', t: T_SEAL + 0.16, size: 0.6, low: 0.8, pan: 0.25 },
+    { sfx: 'impact', t: T_SEAL + 0.16, size: 0.28, low: 0.5, pan: 0.25 },
     { sfx: 'whoosh', t: T_TITLE_FLY - 0.1, size: 0.3, direction: -0.5 },
-    { sfx: 'tick', t: T_CELL, size: 0.4 },
+    { sfx: 'tick', t: T_CELL, size: 0.25 },
     { sfx: 'whoosh', t: T_DRAG - 0.15, size: 0.2, direction: -0.6, pan: pan(1500) },
     { sfx: 'whoosh', t: T_VERT - 0.1, size: 0.28, direction: 0.4 },
-    { sfx: 'pop', t: T_MERGE + 0.12, size: 0.45 },
-    { sfx: 'tick', t: T_POP, size: 0.5 },
+    { sfx: 'pop', t: T_MERGE + 0.12, size: 0.3 },
+    { sfx: 'tick', t: T_POP, size: 0.3 },
     { sfx: 'riser', t: T_FLOOD - 0.6, duration: L.stroke.to - T_FLOOD + 0.6, size: 0.35 },
-    { sfx: 'impact', t: L.glass.from, size: 0.4, low: 0.5 },
+    { sfx: 'impact', t: L.glass.from, size: 0.25, low: 0.3 },
     { sfx: 'whoosh', t: T_PILL - 0.1, size: 0.25, direction: 0.8, pan: -0.4 },
     { sfx: 'shimmer', t: T_LENS, size: 0.25 },
     { sfx: 'shimmer', t: T_GLASS_TEXT, size: 0.35 },
     { sfx: 'swell', t: T_EXTRUDE - 0.1, duration: 1.0, size: 0.3 },
-    { sfx: 'impact', t: T_HOP_LAND, size: 0.35, low: 1, brightness: 0.2 },
+    { sfx: 'impact', t: T_HOP_LAND, size: 0.3, low: 0.6, brightness: 0.2 },
     { sfx: 'whoosh', t: T_PULL - 0.05, size: 0.3, direction: -0.3 },
     { sfx: 'whoosh', t: T_PUSH, size: 0.35, direction: 0.5 },
-    { sfx: 'key', t: T_HERE, size: 0.3 },
-    ...SNAPS.map((t, i): SfxEvent => ({ sfx: 'tick', t, size: 0.3, pan: (i - 1) * 0.2 })),
-    { sfx: 'impact', t: T_END_SEAL, size: 0.6, low: 0.8 },
+    { sfx: 'key', t: T_HERE, size: 0.1 },
+    { sfx: 'impact', t: T_END_SEAL, size: 0.28, low: 0.5 },
   ]
   return { id: 'fx', role: 'sfx', sfx }
 }
