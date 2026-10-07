@@ -26,6 +26,7 @@ const HELP = `motionflexlayer <命令> <合成入口> [选项]
       --no-audio
   audio <entry>              只混音：WAV + 波形图 + 电平报告
   cues <entry>               导出时间轴（节拍、段落、cue）JSON，给剪辑软件或作曲用
+  voice <entry>              合成或读取旁白缓存，按段列出起止时间、字数和语速
 
 通用
   --export <名字>             合成的导出名，默认 default
@@ -144,6 +145,26 @@ async function main() {
     await mkdir(resolve(out, '..'), { recursive: true })
     await writeFile(out, JSON.stringify({ fps: comp.fps, ...comp.tl.toJSON() }, null, 2))
     console.log(out)
+    return
+  }
+
+  if (cmd === 'voice') {
+    const lines = comp.tl.sections.filter((s) => typeof s.data?.text === 'string')
+    if (lines.length === 0) {
+      console.log('这个合成没有登记旁白（narration().apply(tl) 或 narration().timeline()）')
+      return
+    }
+    for (const s of lines) {
+      const words = comp.tl.cues('word').filter((c) => c.data?.line === s.name)
+      const speech = comp.tl.cues(s.name)[0]
+      const last = words.at(-1)
+      const spoken = speech && last ? last.t - speech.t : 0
+      const chars = String(s.data!.text).replace(/[\s\p{P}]/gu, '').length
+      const rate = spoken > 0 ? `${(chars / spoken).toFixed(1)} 字/秒` : ''
+      console.log(`${s.from.toFixed(2).padStart(6)}–${s.to.toFixed(2).padEnd(6)} ${s.name.padEnd(10)} ${String(words.length).padStart(3)} 词  ${rate}`)
+      console.log(`        ${s.data!.text}`)
+    }
+    console.log(`总时长 ${comp.duration.toFixed(2)}s`)
     return
   }
 
