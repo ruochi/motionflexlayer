@@ -211,12 +211,12 @@ export function subtitle(f: Frame): Child {
   )
 }
 
-/** 印章：红底竖排两个字。片头盖一次，片尾再盖一次。 */
-export function seal(x: number, y: number, k: number, rotate: number): Child {
-  if (k <= 0.002) return null
-  const s = 1 + 0.9 * (1 - Math.min(1, k))
+/** 印章：红底竖排两个字。片头盖一次，片尾再盖一次。k 是落下的进度，away 是收走的进度。 */
+export function seal(x: number, y: number, k: number, rotate: number, away = 0): Child {
+  if (k <= 0.002 || away >= 0.999) return null
+  const s = (1 + 0.9 * (1 - Math.min(1, k))) * (1 - away)
   return place(
-    { x, y, scale: s, rotate, opacity: Math.min(1, k * 3), id: 'seal' },
+    { x, y, scale: Math.max(0.001, s), rotate: rotate + 50 * away, opacity: Math.min(1, k * 3) * (1 - away * away), id: 'seal' },
     h(
       'div',
       { style: `width:132px; height:132px; border-radius:16px; background:${C.red}; display:flex; align-items:center; justify-content:center` },

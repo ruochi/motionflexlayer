@@ -126,7 +126,9 @@ function shot(t: number) {
   const x = lerp(from.x - 18 * drift, HERE_AT.x, push)
   const y = lerp(from.y, HERE_AT.y, push)
   const rotate = 3 * Math.sin(Math.PI * pull) * (1 - push) - 4 * Math.sin(Math.PI * push)
-  return { x, y, zoom: Math.exp(logZ) + 0.25 * progress(t, T_PUSH_END, L.camera.to + 0.6), rotate }
+  // 段尾穿进“这里”：最后 0.45 秒再放大 3 倍，同时淡出，报告从稍大的尺寸落回原位接上这股推力
+  const through = Math.exp(Math.log(3) * progress(t, L.camera.to - 0.45, L.camera.to, 'inCubic'))
+  return { x, y, zoom: (Math.exp(logZ) + 0.25 * progress(t, T_PUSH_END, L.camera.to + 0.6)) * through, rotate }
 }
 
 const toScreen = (s: ReturnType<typeof shot>, p: { x: number; y: number }) => ({ x: (p.x - s.x) * s.zoom + W / 2, y: (p.y - s.y) * s.zoom + H / 2 })
@@ -179,6 +181,7 @@ function boxes(t: number, s: ReturnType<typeof shot>): Child[] {
   }
   const b = rect(HERE_BOX)
   const k = rect(HERE_INK)
+  const through = t > L.camera.to - 0.45 ? { expect: 'text-overlap: 穿进“这里”时标签跟着放大，从左上角的标签底下经过' } : undefined
   return [
     fx({ width: W, height: H, name: 'here-boxes' }, (ctx) => {
       ctx.globalAlpha = a
@@ -192,7 +195,7 @@ function boxes(t: number, s: ReturnType<typeof shot>): Child[] {
       ctx.strokeStyle = C.red
       ctx.strokeRect(k.x, k.y, k.w, k.h)
     }),
-    place({ x: b.x, y: b.y - 14, anchor: 'bottom-left', opacity: a }, text('box', { fontFamily: LATIN, fontSize: 44, color: C.blue })),
+    place({ x: b.x, y: b.y - 14, anchor: 'bottom-left', opacity: a, attrs: through }, text('box', { fontFamily: LATIN, fontSize: 44, color: C.blue })),
     place({ x: k.x + k.w, y: k.y + k.h + 14, anchor: 'top-right', opacity: a * draw }, text('ink', { fontFamily: LATIN, fontSize: 44, color: C.red })),
   ]
 }
@@ -222,13 +225,14 @@ const T_BOXWORD = at('report', '盒子')
 
 function reportScene(f: Frame): Child[] {
   const t = f.t
-  const a = fade(t, L.report.from, L.report.to + 0.1, 0.4, 0.5)
+  const a = fade(t, L.report.from - 0.1, L.report.to + 0.1, 0.35, 0.5)
   if (a <= 0) return []
   const snap = SNAPS.map((s) => spring(t - s, { damping: 14, stiffness: 160 }))
   const xs = MEASURE.map((m, i) => GUIDE - m.inset * snap[i]!)
   const lineK = progress(t, L.report.from, L.report.from + 0.7, 'outCubic')
   const outline = progress(t, T_TABLE - 0.2, T_TABLE + 0.5, 'outCubic')
   const boxFade = 1 - 0.65 * progress(t, T_BOXWORD, T_BOXWORD + 0.5)
+  const zoomIn = 1 + 0.12 * (1 - progress(t, L.report.from, L.report.from + 0.7, 'outCubic'))
   const rows = MEASURE.map((m, i) => {
     const on = progress(t, T_TABLE + i * 0.22, T_TABLE + i * 0.22 + 0.3)
     const dx = xs[i]! - GUIDE
@@ -242,7 +246,7 @@ function reportScene(f: Frame): Child[] {
   })
   return [
     place(
-      { x: 0, y: 0, anchor: 'top-left', width: W, height: H, opacity: a, id: 'report' },
+      { x: W / 2, y: H / 2, width: W, height: H, opacity: a, scale: zoomIn, id: 'report', attrs: zoomIn > 1.001 ? { expect: 'overflow-canvas: 从稍大的尺寸落回原位' } : undefined },
       fx({ width: W, height: H, name: 'report-lines' }, (ctx) => {
         ctx.strokeStyle = C.red
         ctx.lineWidth = 2

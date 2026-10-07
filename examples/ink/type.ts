@@ -179,7 +179,7 @@ function paragraphPose(i: number, t: number): Pose {
 function titleChar(i: number, t: number): Child[] {
   const g = TITLE[i]!
   const t0 = 0.45 + i * 0.6
-  const dash = TITLE_LEN[i]! * progress(t, t0, t0 + 1.5, 'inOutSine')
+  const dash = TITLE_LEN[i]! * progress(t, t0, t0 + 1.5, 'outQuad')
   if (dash <= 0) return []
   const fill = progress(t, t0 + 1.0, t0 + 1.7, 'outCubic')
   const hit = pulse(t, [T_SEAL + 0.16], 9)
@@ -218,8 +218,9 @@ function intro(f: Frame): Child[] {
   if (t < T_TITLE_FLY + 0.2) out.push(sheet({ id: 'title', glow: `26 ${rgba(C.paper, 0.25 * progress(t, 1.2, 2.6) * (1 - progress(t, 3, 5)))}` }, ...titleChar(0, t), ...titleChar(1, t)))
   const k = progress(t, T_SEAL, T_SEAL + 0.16, 'inQuad')
   const settle = 1 - 0.05 * Math.sin(Math.PI * progress(t, T_SEAL + 0.16, T_SEAL + 0.36))
-  const sealA = 1 - progress(t, L.intro.to - 0.5, L.intro.to)
-  out.push(sealA > 0 ? place({ x: 0, y: 0, anchor: 'top-left', opacity: sealA }, seal(TITLE_X[1]! + 250, TITLE_Y + 150, k * settle, -6)) : null)
+  // 书法字起飞前，印章转着缩回去
+  const away = progress(t, T_TITLE_FLY - 0.3, T_TITLE_FLY + 0.15, 'inBack')
+  out.push(seal(TITLE_X[1]! + 250, TITLE_Y + 150, k * settle, -6, away))
   const tag = fade(t, 4.1, L.intro.to - 0.1, 0.6, 0.4)
   out.push(place({ x: W / 2, y: 700 + 20 * (1 - tag), opacity: tag }, text('九个镜头，每一帧都由 flexlayer 排版、绘制', { fontSize: 46, color: C.dim, letterSpacing: '0.04em' })))
   return out
