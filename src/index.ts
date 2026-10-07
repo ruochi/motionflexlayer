@@ -51,6 +51,8 @@ export {
   typewriter,
   tokenLength,
   type Anchor,
+  type Origin,
+  originAttr,
   type Child,
   type StyleObject,
   type PlaceOptions,

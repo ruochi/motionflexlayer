@@ -63,4 +63,20 @@ describe('camera', () => {
     const node = camera({ width: W, height: H, x: 300, y: 50, zoom: 4, shakeX: 30 }, dot(300, 50))
     expect(await pixel(node, W / 2 + 30, H / 2)).toEqual([255, 0, 0])
   })
+
+  it('只用一层 layer，绕目标点旋转时目标仍在中心', async () => {
+    const node = camera({ width: W, height: H, x: 300, y: 50, zoom: 2, rotate: 30 }, dot(300, 50))
+    expect(node.children.every((c) => typeof c !== 'object' || (c as FvgNode).tag !== 'layer')).toBe(true)
+    expect(node.attrs.origin).toBe('300 50')
+    expect(await pixel(node, W / 2, H / 2)).toEqual([255, 0, 0])
+  })
+})
+
+describe('place origin', () => {
+  it('数对写成 "x y"，这一点在缩放时不动', async () => {
+    const n = place({ x: 0, y: 0, anchor: 'top-left', width: W, height: H, origin: [40, 30], scale: 3 }, dot(40, 30))
+    expect(n!.attrs.origin).toBe('40 30')
+    expect(await pixel(n!, 40, 30)).toEqual([255, 0, 0])
+    expect(await pixel(n!, 40 + 14, 30)).toEqual([255, 0, 0])
+  })
 })

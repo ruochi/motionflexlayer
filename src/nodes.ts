@@ -38,6 +38,15 @@ export function css(style: StyleObject | string | undefined): string | undefined
   return parts.join('; ')
 }
 
+export type Origin = Anchor | string | readonly [number, number]
+
+/** origin 写成 flexlayer 的属性值。数对四舍五入到 0.01px。 */
+export function originAttr(origin: Origin | undefined): string | undefined {
+  if (origin == null || origin === 'center') return undefined
+  if (typeof origin === 'string') return origin
+  return `${r2(origin[0])} ${r2(origin[1])}`
+}
+
 export type PlaceOptions = {
   x: number
   y: number
@@ -47,8 +56,11 @@ export type PlaceOptions = {
   /** 度。 */
   rotate?: number
   scale?: number
-  /** 旋转、缩放的支点，九宫格。默认 center。 */
-  origin?: Anchor
+  /**
+   * 旋转、缩放的支点，默认 center。九宫格，或这一层盒子里的一点：
+   * `[120, 80]`、`'30% 40%'`、`'top 80'`。这一点在画面上不动。
+   */
+  origin?: Origin
   width?: number
   height?: number
   id?: string
@@ -75,7 +87,7 @@ export function place(opts: PlaceOptions, ...children: Child[]): FvgNode | null 
       opacity: opacity < 1 ? r2(clamp(opacity) * 1000) / 1000 : undefined,
       rotate: opts.rotate ? r2(opts.rotate) : undefined,
       scale: opts.scale != null && opts.scale !== 1 ? Math.round(opts.scale * 10000) / 10000 : undefined,
-      origin: opts.origin && opts.origin !== 'center' ? opts.origin : undefined,
+      origin: originAttr(opts.origin),
       ...opts.attrs,
     },
     ...children,
@@ -124,7 +136,7 @@ export type CameraOptions = {
   /** 画布大小。 */
   width: number
   height: number
-  /** 镜头对准的世界坐标，落在画面中心。默认画布中心，即不动。 */
+  /** 镜头对准的世界坐标，落在画面中心。默认画布中心，即不动。缩放、旋转都绕这一点。 */
   x?: number
   y?: number
   /** 绕镜头中心缩放。 */
@@ -140,8 +152,7 @@ export type CameraOptions = {
  * 镜头：对准任意世界坐标，绕它缩放、旋转，再叠加屏幕空间的震动。
  * 子元素照常用画布坐标摆放。
  *
- * 实现：外层 2W×2H、origin 居中，内层把世界坐标 (x, y) 移到外层中心。
- * flexlayer 的 origin 只有九宫格，这是绕任意点缩放的标准写法。
+ * 一层 layer：把 (x, y) 平移到画面中心，再以它为 origin 缩放、旋转。
  * 镜头里不要放 blur / mask / grade：它们按缩放后的尺寸开离屏画布，zoom 很大时极慢。
  */
 export function camera(opts: CameraOptions, ...children: Child[]): FvgNode {
@@ -149,18 +160,19 @@ export function camera(opts: CameraOptions, ...children: Child[]): FvgNode {
   const x = opts.x ?? W / 2
   const y = opts.y ?? H / 2
   const zoom = opts.zoom ?? 1
+  const moved = x !== W / 2 || y !== H / 2
   return h(
     'layer',
     {
-      x: r2(W / 2 + (opts.shakeX ?? 0)),
-      y: r2(H / 2 + (opts.shakeY ?? 0)),
-      anchor: 'center',
-      width: W * 2,
-      height: H * 2,
+      x: r2(W / 2 - x + (opts.shakeX ?? 0)),
+      y: r2(H / 2 - y + (opts.shakeY ?? 0)),
+      width: W,
+      height: H,
+      origin: moved ? originAttr([x, y]) : undefined,
       scale: zoom !== 1 ? Math.round(zoom * 10000) / 10000 : undefined,
       rotate: opts.rotate ? r2(opts.rotate) : undefined,
     },
-    h('layer', { x: r2(W - x), y: r2(H - y), width: W, height: H }, ...children),
+    ...children,
   )
 }
 
