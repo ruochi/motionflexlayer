@@ -10,7 +10,7 @@
  */
 import { canvas, glyph, h, type Glyph, type PlacedLine } from 'flexlayer'
 import { clamp, fade, fx, hash, lerp, mixColor, place, progress, pulse, rgba, spring, text, tween, wiggle, type Child, type Frame } from 'motionflexlayer'
-import { at, C, glyphAt, H, L, LATIN, pathLength, seal, sheet, W } from './kit.js'
+import { at, C, glyphAt, H, L, LATIN, offCanvas, pathLength, seal, sheet, W } from './kit.js'
 
 export const P = '先排版，再拆字。每个字都知道自己落在哪一行、哪一格。笔画着墨之处，就是它该在的地方。'
 const CHARS = [...P]
@@ -153,7 +153,8 @@ function paragraphPose(i: number, t: number): Pose {
   let scale = 1
   let rotate = 0
   let opacity = 1
-  if (t < T_DRAG) {
+  if (t < T_DRAG && TITLE_IDX.includes(i)) p = at2(A_O, A.slots[i]!)
+  else if (t < T_DRAG) {
     const slot = at2(A_O, A.slots[i]!)
     const s0 = rainStart(i)
     const k = spring(t - s0, { damping: 15, stiffness: 120 })
@@ -186,16 +187,10 @@ function titleChar(i: number, t: number): Child[] {
   const y = TITLE_Y + wiggle(t, 26, 7 * hit, i + 5)
   if (t >= T_TITLE_FLY) return []
   return [
-    h(
-      'g',
-      { transform: `translate(${(x - g.width / 2).toFixed(2)},${(y - g.height / 2).toFixed(2)})` },
-      h('path', {
-        d: g.d,
-        fill: rgba(C.paper, fill),
-        stroke: rgba(C.paper, 1 - 0.9 * fill),
-        'stroke-width': 3,
-        'stroke-dasharray': `${dash.toFixed(1)} ${(TITLE_LEN[i]! + 10).toFixed(0)}`,
-      }),
+    glyphAt(
+      g,
+      { x, y, fill: rgba(C.paper, fill) },
+      { stroke: rgba(C.paper, 1 - 0.9 * fill), 'stroke-width': 3, 'stroke-dasharray': `${dash.toFixed(1)} ${(TITLE_LEN[i]! + 10).toFixed(0)}` },
     ),
   ]
 }
@@ -349,13 +344,16 @@ function sticker(f: Frame): Child[] {
   const lift = progress(t, T_POP, T_POP + 0.4, 'outCubic')
   const flooding = t > T_FLOOD - 0.05
   const fall: Child[] = []
+  let out = false
   CHARS.forEach((_, i) => {
     if (STICK_IDX.includes(i)) return
     const p = fallPose(i, t)
-    if (p) fall.push(glyphAt(SHAPES[i]!, p))
+    if (!p) return
+    fall.push(glyphAt(SHAPES[i]!, p))
+    out ||= offCanvas(p)
   })
   return [
-    sheet({ id: 'falling', expect: 'overflow-canvas: 落出画面的字' }, ...fall),
+    sheet({ id: 'falling', expect: out ? 'overflow-canvas: 落出画面的字' : undefined }, ...fall),
     sheet(
       {
         id: 'sticker',
@@ -364,7 +362,7 @@ function sticker(f: Frame): Child[] {
         scale: bump > 0.001 ? 1 + 0.08 * bump : undefined,
         origin: `${W / 2} ${CY}`,
         opacity: 1 - progress(t, L.glass.from + 0.2, L.glass.from + 0.6),
-        expect: flooding ? 'effect-clipped: 描边漫出画面做转场' : undefined,
+        expect: w2 > 400 ? 'effect-clipped: 描边漫出画面做转场' : undefined,
       },
       ...STICK_IDX.map((i, n) => glyphAt(SHAPES[i]!, { ...stickerPose(n, t), fill })),
     ),
@@ -377,13 +375,18 @@ function paragraph(f: Frame): Child {
   const t = f.t
   if (t < T_TITLE_FLY || t >= T_LIFT) return null
   const out: Child[] = []
+  let off = false
   CHARS.forEach((_, i) => {
     const n = TITLE_IDX.indexOf(i)
     if (n >= 0 && t < T_TITLE_FLY + n * 0.12 + 0.95) out.push(...titleFlight(n, t))
     else if (n < 0 && t < rainStart(i)) return
-    else out.push(glyphAt(SHAPES[i]!, paragraphPose(i, t)))
+    else {
+      const p = paragraphPose(i, t)
+      out.push(glyphAt(SHAPES[i]!, p))
+      off ||= offCanvas(p)
+    }
   })
-  return sheet({ id: 'paragraph', expect: 'overflow-canvas: 字从画外飞进来' }, ...out)
+  return sheet({ id: 'paragraph', expect: off ? 'overflow-canvas: 字从画外飞进来' : undefined }, ...out)
 }
 
 export function typeScenes(f: Frame): Child[] {

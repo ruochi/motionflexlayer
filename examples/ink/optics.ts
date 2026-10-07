@@ -28,20 +28,16 @@ const ROWS = [
 ]
 
 /** 跑马灯：每行三份文字首尾相接，按速度平移，走完一份宽度就绕回来。 */
-function rows(t: number, withGlass: boolean): Child {
+function rows(t: number): Child {
   const t0 = L.glass.from - 0.1
   return sheet(
-    { id: 'marquee', expect: `overflow-canvas: 跑马灯出画; outside-safe: 跑马灯出画${withGlass ? '; text-overlap: 背景字压在玻璃字下面' : ''}` },
+    { id: 'marquee', expect: 'overflow-canvas: 跑马灯出画; outside-safe: 跑马灯出画; text-overlap: 跑马灯是背景，标签和玻璃字压在上面' },
     ...ROWS.map((r, i) => {
       const enter = progress(t, t0 + i * 0.08, t0 + i * 0.08 + 0.9, 'outExpo')
       const side = r.speed > 0 ? -1 : 1
       const shift = ((((t - t0) * r.speed) % ROW_W) + ROW_W) % ROW_W
       const x = -ROW_W + shift + side * (1 - enter) * W
-      return h(
-        'layer',
-        { x: x.toFixed(1), y: r.y, anchor: 'left' },
-        h('div', { style: 'display:flex' }, ...[0, 1, 2].map(() => h('p', { style: `white-space:nowrap; ${ROW_FONT}; color:${r.color}` }, ROW_TEXT))),
-      )
+      return h('layer', { x: x.toFixed(1), y: r.y, anchor: 'left' }, h('p', { style: `white-space:nowrap; ${ROW_FONT}; color:${r.color}` }, ROW_TEXT.repeat(3)))
     }),
   )
 }
@@ -57,8 +53,9 @@ function lens(t: number): Child {
   const hgt = lerp(300, 340, round) * breathe
   const cx = lerp(-520, W / 2, k) + 70 * Math.sin((t - T_PILL) * 0.7) + 260 * Math.sin((t - T_LENS) * 1.3) * round
   const cy = H / 2 - 20 + 26 * Math.sin((t - T_PILL) * 1.1) + drop * 900
+  const off = cx - w / 2 < 0 || cy + hgt / 2 > H
   return sheet(
-    { id: 'lens' },
+    { id: 'lens', expect: off ? 'overflow-canvas: 玻璃从画外滑进来、落出画外' : undefined },
     h('rect', {
       x: (cx - w / 2).toFixed(1),
       y: (cy - hgt / 2).toFixed(1),
@@ -76,8 +73,11 @@ function glassText(t: number): Child {
   const k = spring(t - T_GLASS_TEXT + 0.15, { damping: 13, stiffness: 70 })
   if (k <= 0) return null
   const float = t - T_GLASS_TEXT
+  const y = lerp(1500, H / 2 - 10, k) + 12 * Math.sin(float * 1.6)
+  // 字高约 470，中心低于 H - 235 时字脚出画，同时压着字幕升上来
+  const rising = y > H - 300
   return place(
-    { x: W / 2, y: lerp(1500, H / 2 - 10, k) + 12 * Math.sin(float * 1.6), rotate: 2.2 * Math.sin(float * 1.1), id: 'glass-text' },
+    { x: W / 2, y, rotate: 2.2 * Math.sin(float * 1.1), id: 'glass-text', attrs: rising ? { expect: 'overflow-canvas: 从画面下方升上来; text-overlap: 升上来时经过字幕' } : undefined },
     h('p', { style: 'white-space:nowrap; font-size:470px; font-weight:800; color:#ffffff10; glass:clear; shadow:0 24 48 #00000055' }, '着墨'),
   )
 }
@@ -85,11 +85,10 @@ function glassText(t: number): Child {
 function glassScene(f: Frame): Child[] {
   const t = f.t
   if (t < L.glass.from - 0.15 || t > L.glass.to + 0.05) return []
-  const withGlass = t > T_GLASS_TEXT - 0.2
   const dark = progress(t, L.glass.to - 0.55, L.glass.to, 'inOutSine')
   return [
     h('rect', { x: 0, y: 0, width: W, height: H, fill: C.red }),
-    rows(t, withGlass),
+    rows(t),
     lens(t),
     glassText(t),
     dark > 0 ? h('rect', { x: 0, y: 0, width: W, height: H, fill: C.night, opacity: dark.toFixed(3) }) : null,

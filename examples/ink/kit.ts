@@ -43,16 +43,34 @@ export type GlyphPose = {
   fill?: string
 }
 
-/** 把一个字形摆到 (x, y)：旋转、缩放都绕字身中心。返回 g，要放在 layer 里。 */
-export function glyphAt(g: Glyph, p: GlyphPose): FvgNode | null {
+/**
+ * 把一个字形摆到 (x, y)：旋转、缩放都绕字身中心。
+ * 每个字一层 layer 而不是 g：外层的 ink-stroke、shadow 合并子树墨迹时只认 layer，g 里的路径会被漏掉（flexlayer 0.2.20）。
+ */
+export function glyphAt(g: Glyph, p: GlyphPose, attrs: Record<string, string | number | undefined> = {}): FvgNode | null {
   const o = p.opacity ?? 1
   if (o <= 0.002 || !g.d) return null
   const s = p.scale ?? 1
-  let tf = `translate(${r2(p.x)},${r2(p.y)})`
-  if (p.rotate) tf += ` rotate(${r2(p.rotate)})`
-  if (s !== 1) tf += ` scale(${Math.round(s * 10000) / 10000})`
-  tf += ` translate(${r2(-g.width / 2)},${r2(-g.height / 2)})`
-  return h('g', { transform: tf, opacity: o < 1 ? Math.round(o * 1000) / 1000 : undefined }, h('path', { d: g.d, fill: p.fill ?? C.paper, stroke: 'none' }))
+  return h(
+    'layer',
+    {
+      x: r2(p.x),
+      y: r2(p.y),
+      anchor: 'center',
+      width: r2(g.width),
+      height: r2(g.height),
+      rotate: p.rotate ? r2(p.rotate) : undefined,
+      scale: s !== 1 ? Math.round(s * 10000) / 10000 : undefined,
+      opacity: o < 1 ? Math.round(o * 1000) / 1000 : undefined,
+    },
+    h('path', { d: g.d, fill: p.fill ?? C.paper, stroke: 'none', ...attrs }),
+  )
+}
+
+/** 字身中心在 p、半径约 r 的字有没有伸出画布。用来决定这一帧要不要写 overflow-canvas 的 expect。 */
+export const offCanvas = (p: { x: number; y: number; scale?: number }, r = 36) => {
+  const k = r * (p.scale ?? 1)
+  return p.x - k < 0 || p.x + k > W || p.y - k < 0 || p.y + k > H
 }
 
 /** 整幅画布大小的一层，放 glyphAt 摆好的字。 */
@@ -132,9 +150,10 @@ export function chapter(f: Frame): Child[] {
     const n = String(NUMBERED.indexOf(id) + 1).padStart(2, '0')
     out.push(
       place(
-        { x: 120, y: 80, anchor: 'top-left', opacity: a, id: `chapter-${id}` },
+        { x: 96, y: 66, anchor: 'top-left', opacity: a, id: `chapter-${id}` },
         box(
-          { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 },
+          // 玻璃一段的底是红色跑马灯，标签垫一块夜色才读得清；在夜色底上看不出这块垫子
+          { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6, padding: '14px 24px', background: rgba(C.night, 0.88), borderRadius: 16 },
           box(
             { display: 'flex', gap: 22, alignItems: 'baseline' },
             text(n, { fontFamily: LATIN, fontWeight: 700, fontSize: 46, color: C.red }),
@@ -153,9 +172,14 @@ export function dots(f: Frame): Child {
   const a = fade(f.t, L.intro.to - 0.6, L.outro.from + 0.6, 0.5, 0.5)
   if (a <= 0) return null
   const n = ORDER.length
-  return fx({ x: W - 120 - 170, y: 104, width: 340, height: 40, name: 'dots' }, (ctx) => {
+  return fx({ x: W - 120 - 150, y: 104, width: 300, height: 40, name: 'dots' }, (ctx) => {
     ctx.globalAlpha = a
-    let x = 340
+    ctx.fillStyle = rgba(C.night, 0.88)
+    ctx.beginPath()
+    ctx.roundRect(0, 0, 300, 40, 20)
+    ctx.fill()
+    // 9 个点连同间隔共 250px，两边各留 25
+    let x = 275
     for (let i = n - 1; i >= 0; i--) {
       const l = L[ORDER[i]!]
       const on = spring(f.t - l.from, { damping: 18, stiffness: 220 }) - spring(f.t - l.to, { damping: 18, stiffness: 220 })

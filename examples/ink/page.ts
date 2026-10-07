@@ -59,26 +59,32 @@ const measured = canvas.create(pageNode(C.gold))
 const PX = (W - PAGE_W) / 2
 const PY = H / 2 - measured.height / 2 - 20
 
-/** 在第 n 段文字里找第 index 个字，返回所在行和这一格。 */
-function cell(n: number, index: number): { line: PlacedLine; x: number; width: number } {
-  let k = 0
+type Cell = { line: PlacedLine; x: number; width: number }
+
+/** 在第 n 段文字里找 context，返回其中从第 skip 个字起的 count 个格子。折行处的空格不占格，所以按文字找，不按序号数。 */
+function cells(n: number, context: string, skip: number, count: number): Cell[] {
+  const all: Cell[] = []
+  let joined = ''
   for (const line of measured.text[n]!.lines) {
     for (const c of line.chars) {
-      if (k++ === index) return { line, x: c.x, width: c.width }
+      all.push({ line, x: c.x, width: c.width })
+      joined += c.text
     }
   }
-  throw new Error(`第 ${n} 段没有第 ${index} 个字`)
+  const at = joined.indexOf(context)
+  if (at < 0) throw new Error(`第 ${n} 段里没有“${context}”`)
+  return all.slice(at + skip, at + skip + count)
 }
 
 const MO_SMALL = (await glyph('墨', { font: 'Kai', size: 34, weight: 700 }))[0]!
 const HERE = await glyph('这里', { font: 'Kai', size: 34, weight: 700 })
 
-const moCell = cell(1, [...COL1_A].length)
+const moCell = cells(1, '着墨迹', 1, 1)[0]!
 const MO_AT = {
   x: PX + moCell.x + MO_SMALL.width / 2,
   y: PY + moCell.line.baseline - MO_SMALL.baseline + MO_SMALL.height / 2,
 }
-const hereCells = [0, 1].map((j) => cell(3, [...COL3_A].length + j))
+const hereCells = cells(3, '就是这里', 2, 2)
 /** “这里”两个字的盒子和着墨，页面坐标。 */
 const HERE_BOX = {
   x: PX + hereCells[0]!.x,
@@ -108,7 +114,7 @@ const T_PULL_END = at('camera', '一点') + 0.35
 export const T_PUSH = at('camera', '文字') - 0.15
 export const T_HERE = at('camera', '这里')
 const T_PUSH_END = T_HERE + 0.45
-const T_BOXES = L.camera.to - 1.3
+const T_BOXES = T_PUSH_END + 0.35
 
 /** 镜头：缩放按对数插值，目标点和缩放用同一条缓动，推拉时画面里的运动是匀的。 */
 function shot(t: number) {
@@ -127,12 +133,12 @@ const toScreen = (s: ReturnType<typeof shot>, p: { x: number; y: number }) => ({
 
 function cameraScene(f: Frame): Child[] {
   const t = f.t
-  if (t < L.camera.from - 0.02 || t > L.camera.to + 0.5) return []
+  if (t < L.camera.from - 0.02 || t > L.camera.to) return []
   const s = shot(t)
   const pageIn = progress(t, L.camera.from + 0.05, L.camera.from + 0.7, 'inOutSine')
   const glowHere = fade(t, T_HERE - 0.1, L.camera.to + 1, 0.25, 0.3)
   const focus = progress(t, T_PUSH, T_PUSH_END, 'inOutSine')
-  const out = progress(t, L.camera.to, L.camera.to + 0.45, 'inOutSine')
+  const out = progress(t, L.camera.to - 0.45, L.camera.to, 'inOutSine')
   const world: Child[] = [
     glowHere > 0
       ? fx({ x: HERE_BOX.x + HERE_BOX.w / 2, y: HERE_BOX.y + HERE_BOX.h / 2, width: HERE_BOX.w + 40, height: HERE_BOX.h + 20, name: 'here-mark' }, (ctx) => {
@@ -142,7 +148,7 @@ function cameraScene(f: Frame): Child[] {
           ctx.fill()
         })
       : null,
-    place({ x: PX, y: PY, anchor: 'top-left', opacity: pageIn, id: 'page', attrs: { expect: 'min-font-size: 远景里的小字，推近后放大; overflow-canvas: 推近时出画; outside-safe: 推近时出画' } }, pageNode(C.gold)),
+    place({ x: PX, y: PY, anchor: 'top-left', opacity: pageIn, id: 'page', attrs: { expect: 'min-font-size: 远景里的小字，推近后放大; overflow-canvas: 推近时出画; outside-safe: 推近时出画; text-overlap: 推近后正文从标签和字幕底下经过' } }, pageNode(C.gold)),
     pageIn < 1 ? glyphAt(MO_SMALL, { ...MO_AT, fill: C.red }) : null,
   ]
   return [
@@ -164,7 +170,7 @@ function cameraScene(f: Frame): Child[] {
 
 /** 推到“这里”之后：盒子（蓝）和着墨（红）。同一份报告里的两种矩形。 */
 function boxes(t: number, s: ReturnType<typeof shot>): Child[] {
-  const a = fade(t, T_BOXES, L.camera.to + 0.4, 0.2, 0.35)
+  const a = fade(t, T_BOXES, L.camera.to, 0.2, 0.4)
   if (a <= 0) return []
   const draw = progress(t, T_BOXES, T_BOXES + 0.6, 'outCubic')
   const rect = (r: { x: number; y: number; w: number; h: number }) => {
@@ -216,7 +222,7 @@ const T_BOXWORD = at('report', '盒子')
 
 function reportScene(f: Frame): Child[] {
   const t = f.t
-  const a = fade(t, L.report.from - 0.1, L.report.to + 0.1, 0.4, 0.5)
+  const a = fade(t, L.report.from, L.report.to + 0.1, 0.4, 0.5)
   if (a <= 0) return []
   const snap = SNAPS.map((s) => spring(t - s, { damping: 14, stiffness: 160 }))
   const xs = MEASURE.map((m, i) => GUIDE - m.inset * snap[i]!)
