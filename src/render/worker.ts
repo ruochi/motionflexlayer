@@ -1,8 +1,10 @@
 import { spawn } from 'node:child_process'
-import { loadComposition, nodeAt, type Composition } from '../composition.js'
+import { readFile } from 'node:fs/promises'
+import type { Envelopes } from '../audio/envelopes.js'
+import { loadComposition, setEnvelopes, type Composition } from '../composition.js'
 import { ffmpegPath } from './ffmpeg.js'
+import { renderRgba } from './frame.js'
 import { IssueLog, type IssueStat } from './issues.js'
-import { renderRaw } from './raw.js'
 
 export type WorkerJob = {
   entry: string
@@ -15,6 +17,8 @@ export type WorkerJob = {
   crf: number
   preset: string
   out: string
+  /** 主进程算好的音轨包络（JSON 文件）。 */
+  envelopes?: string
 }
 
 export type WorkerMessage =
@@ -46,15 +50,14 @@ function startEncoder(ffmpeg: string, job: WorkerJob, width: number, height: num
 async function run(job: WorkerJob): Promise<void> {
   const loaded = await loadComposition(job.entry, job.exportName)
   const comp: Composition = { ...loaded, fps: job.fps }
+  if (job.envelopes) setEnvelopes(comp, JSON.parse(await readFile(job.envelopes, 'utf8')) as Envelopes)
   const ffmpeg = await ffmpegPath()
   let encoder: ReturnType<typeof startEncoder> | undefined
   const issues = new IssueLog(comp.lint)
   let pending = 0
   for (let f = job.from; f < job.to; f++) {
-    const t = f / job.fps
-    const node = await nodeAt(comp, t)
-    const { rgba, width, height, report } = await renderRaw(node, { t, scale: job.scale, baseDir: comp.baseDir })
-    issues.add(report, t)
+    const { rgba, width, height, report } = await renderRgba(comp, f, { scale: job.scale })
+    issues.add(report, f / job.fps)
     encoder ??= startEncoder(ffmpeg, job, width, height)
     if (!encoder.stdin.write(rgba)) await new Promise((r) => encoder!.stdin.once('drain', r))
     if (++pending >= 4) {

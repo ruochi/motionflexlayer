@@ -211,5 +211,5 @@ function duckAt(t: number): number {
 
 export const audio: AudioSpec = {
   clips: [{ src: synthSource(arrange, { seed: 42, mixdown: { duckMusic: duckAt, delayTime: BEAT * 0.75 } }), at: 0 }],
-  master: { normalize: -0.6, fadeOut: 1.2, limit: -0.3 },
+  master: { lufs: -14, ceiling: -1, fadeOut: 1.2 },
 }

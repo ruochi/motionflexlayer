@@ -1,10 +1,11 @@
-import { mkdir, writeFile } from 'node:fs/promises'
-import { dirname, isAbsolute, join, parse, resolve } from 'node:path'
-import { prepare, type Composition } from '../composition.js'
-import { analyzeAudio, drawWaveform, type AudioReport } from './analyze.js'
+import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
+import { isAbsolute, resolve } from 'node:path'
+import { render as renderScore, ScoreSchema, type ClipAudio, type Score, type Track } from 'visualtone'
+import type { Timeline } from '../timeline.js'
 import { decodeAudio } from './decode.js'
-import type { AudioClip, AudioSource, AudioSpec, Duck, Stereo } from './types.js'
-import { encodeWav } from './wav.js'
+import { toEnvelopes, type Envelopes } from './envelopes.js'
+import type { AudioBus, AudioClip, AudioSource, AudioSpec, Duck, Stereo } from './types.js'
 
 export const dbToGain = (db: number) => 10 ** (db / 20)
 export const gainToDb = (g: number) => (g > 0 ? 20 * Math.log10(g) : -Infinity)
@@ -14,206 +15,309 @@ export function sfx(src: AudioSource, times: readonly number[], opts: Omit<Audio
   return times.map((at) => ({ ...opts, src, at }))
 }
 
-const stereo = (n: number): Stereo => ({ l: new Float32Array(n), r: new Float32Array(n) })
-
-async function loadSource(src: AudioSource, sampleRate: number, duration: number, baseDir: string): Promise<Stereo> {
-  if (typeof src === 'string') return decodeAudio(isAbsolute(src) ? src : resolve(baseDir, src), sampleRate)
-  const length = Math.ceil(duration * sampleRate)
-  return src.render({ sampleRate, duration, length })
-}
-
-/** 等功率淡变曲线。 */
-const fadeCurve = (k: number) => Math.sin((Math.min(1, Math.max(0, k)) * Math.PI) / 2)
-
-function placeClip(bus: Stereo, src: Stereo, clip: AudioClip, sr: number): void {
-  const N = bus.l.length
-  const offset = Math.round((clip.offset ?? 0) * sr)
-  const srcLen = src.l.length - offset
-  if (srcLen <= 0) return
-  const start = Math.round((clip.at ?? 0) * sr)
-  const len =
-    clip.duration != null ? Math.round(clip.duration * sr) : clip.loop ? N - start : srcLen
-  const g = dbToGain(clip.gain ?? 0)
-  const pan = Math.max(-1, Math.min(1, clip.pan ?? 0))
-  const a = ((pan + 1) * Math.PI) / 4
-  const gl = g * Math.cos(a) * Math.SQRT2
-  const gr = g * Math.sin(a) * Math.SQRT2
-  const fi = Math.round((clip.fadeIn ?? 0) * sr)
-  const fo = Math.round((clip.fadeOut ?? 0) * sr)
-  for (let i = 0; i < len; i++) {
-    const n = start + i
-    if (n < 0) continue
-    if (n >= N) break
-    let j = i
-    if (j >= srcLen) {
-      if (!clip.loop) break
-      j %= srcLen
-    }
-    let env = 1
-    if (fi > 0 && i < fi) env *= fadeCurve(i / fi)
-    if (fo > 0 && i > len - fo) env *= fadeCurve((len - i) / fo)
-    bus.l[n]! += src.l[offset + j]! * gl * env
-    bus.r[n]! += src.r[offset + j]! * gr * env
-  }
-}
-
-function hitEnv(dt: number, attack: number, hold: number, release: number): number {
-  if (dt < 0) return 0
-  if (dt < attack) return dt / attack
-  if (dt < attack + hold) return 1
-  return Math.exp(-(dt - attack - hold) / release)
-}
-
-/** 闪避增益曲线，每个采样一个值。 */
-function duckGain(d: Duck, N: number, sr: number, buses: Map<string, Stereo>): Float32Array {
-  const out = new Float32Array(N).fill(1)
-  const depth = d.depth ?? 0.5
-  const attack = d.attack ?? 0.008
-  const hold = d.hold ?? 0
-  const release = d.release ?? 0.18
-  if (d.times && d.times.length) {
-    const times = [...d.times].sort((a, b) => a - b)
-    let k = -1
-    for (let n = 0; n < N; n++) {
-      const t = n / sr
-      while (k + 1 < times.length && times[k + 1]! <= t) k++
-      if (k < 0) continue
-      let env = hitEnv(t - times[k]!, attack, hold, release)
-      if (k > 0) env = Math.max(env, hitEnv(t - times[k - 1]!, attack, hold, release))
-      out[n] = 1 - depth * env
-    }
-  }
-  if (d.by) {
-    const src = buses.get(d.by)
-    if (!src) throw new Error(`duck.by 指向不存在的母线：${d.by}`)
-    const ca = Math.exp(-1 / (attack * sr))
-    const cr = Math.exp(-1 / (release * sr))
-    const thr = d.threshold ?? -30
-    let level = 0
-    for (let n = 0; n < N; n++) {
-      const x = Math.max(Math.abs(src.l[n]!), Math.abs(src.r[n]!))
-      level = x > level ? ca * level + (1 - ca) * x : cr * level + (1 - cr) * x
-      const over = (gainToDb(level) - thr) / 12
-      const amount = over <= 0 ? 0 : over >= 1 ? 1 : over
-      out[n] = Math.min(out[n]!, 1 - depth * amount)
-    }
-  }
-  return out
-}
-
-/** 软限幅：天花板以下 85% 线性，往上用 tanh 平滑压到天花板，不会硬削波。 */
-function softLimit(x: number, ceiling: number): number {
-  const k = ceiling * 0.85
-  const ax = Math.abs(x)
-  if (ax <= k) return x
-  return Math.sign(x) * (k + (ceiling - k) * Math.tanh((ax - k) / (ceiling - k)))
+export type MixOptions = {
+  duration: number
+  baseDir?: string
+  /** 画面要读的包络帧率。缺省不算包络。 */
+  envelopeFps?: number
+  /** 保留每条音轨的分轨，分析旁白和音乐的频段关系时要用。 */
+  stems?: boolean
 }
 
 export type MixResult = Stereo & {
   sampleRate: number
-  /** 被限幅器压过的采样比例。超过 1% 说明整体太响。 */
-  limited: number
+  /** 交给 visualtone 的完整乐谱，可以存下来用 visualtone 命令行复现。 */
+  score: Score
+  /** 积分响度 LUFS（设了 master.lufs 时是实测值）。 */
+  lufs: number
+  /** 限幅器最深压了多少 dB。超过 3 dB 说明某处太冲。 */
+  limiterDb: number
+  envelopes?: Envelopes
+  stems?: { id: string; l: Float32Array; r: Float32Array }[]
+  /** 混进来的外部音频和它们的 sha256。 */
+  inputs: { src: string; sha256: string }[]
 }
 
-export type MixOptions = {
-  duration: number
-  baseDir?: string
+const ROLE_BY_NAME: Record<string, 'voice' | 'music' | 'sfx'> = {
+  voice: 'voice',
+  vo: 'voice',
+  narration: 'voice',
+  music: 'music',
+  bgm: 'music',
+  sfx: 'sfx',
+  fx: 'sfx',
+}
+
+const sha = (data: Buffer | Float32Array) =>
+  createHash('sha256')
+    .update(Buffer.isBuffer(data) ? data : Buffer.from(data.buffer, data.byteOffset, data.byteLength))
+    .digest('hex')
+
+type Loaded = { key: string; audio: Stereo; sha256: string }
+
+/** 按 times 闪避的增益曲线，编成 visualtone 的 automation.gain 关键帧。 */
+export function duckKeyframes(d: Duck, duration: number): { t: number; v: number }[] {
+  const times = [...(d.times ?? [])].sort((a, b) => a - b)
+  if (times.length === 0) return []
+  const depth = d.depth ?? 0.5
+  const attack = d.attack ?? 0.008
+  const hold = d.hold ?? 0
+  const release = d.release ?? 0.18
+  const env = (dt: number) =>
+    dt < 0 ? 0 : dt < attack ? dt / attack : dt < attack + hold ? 1 : Math.exp(-(dt - attack - hold) / release)
+  const keys: { t: number; v: number }[] = []
+  const push = (t: number, v: number) => {
+    const last = keys[keys.length - 1]
+    if (last && t <= last.t + 1e-6) return
+    keys.push({ t: Math.round(t * 1e5) / 1e5, v: Math.round(v * 1e4) / 1e4 })
+  }
+  const tail = attack + hold + release * 5
+  for (let k = 0; k < times.length; k++) {
+    const t0 = times[k]!
+    const next = times[k + 1] ?? Infinity
+    const prev = times[k - 1]
+    const carried = prev != null ? env(t0 - prev) : 0
+    push(Math.max(0, t0 - 0.0005), 1 - depth * carried)
+    const end = Math.min(t0 + tail, next, duration)
+    const steps = [0, attack, attack + hold]
+    for (let s = 1; s < 10; s++) steps.push(attack + hold + (release * 5 * s) / 10)
+    for (const dt of steps) {
+      if (t0 + dt > end) break
+      push(t0 + dt, 1 - depth * Math.max(env(dt), prev != null ? env(t0 + dt - prev) : 0))
+    }
+    if (end < next) push(end, 1)
+  }
+  return keys
+}
+
+function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Partial<Pick<T, K>> {
+  const out: Partial<Pick<T, K>> = {}
+  for (const k of keys) if (obj[k] != null) out[k] = obj[k]
+  return out
+}
+
+function roleOf(name: string, bus: AudioBus | undefined): Track['role'] {
+  return bus?.role ?? ROLE_BY_NAME[name.toLowerCase()]
+}
+
+function bake(src: Stereo, opts: { pan?: number; loopTo?: number; sampleRate: number }): Stereo {
+  let { l, r } = src
+  if (opts.loopTo != null && l.length > 0) {
+    const n = Math.ceil(opts.loopTo * opts.sampleRate)
+    const L = new Float32Array(n)
+    const R = new Float32Array(n)
+    for (let i = 0; i < n; i++) {
+      L[i] = l[i % l.length]!
+      R[i] = r[i % r.length]!
+    }
+    l = L
+    r = R
+  }
+  const pan = Math.max(-1, Math.min(1, opts.pan ?? 0))
+  if (pan !== 0) {
+    const a = ((pan + 1) * Math.PI) / 4
+    const gl = Math.cos(a) * Math.SQRT2
+    const gr = Math.sin(a) * Math.SQRT2
+    l = l.map((v) => v * gl)
+    r = r.map((v) => v * gr)
+  }
+  return { l, r }
 }
 
 /**
- * 混音：音源 → 片段（位置、裁剪、循环、增益、声像、淡变）→ 母线（增益、闪避）→ 总线（淡变、归一、软限幅）。
- * 全部离线逐采样计算，同样的输入永远得到同样的输出。
+ * 把 AudioSpec 编成 visualtone 的乐谱：每条母线一条音轨，片段变成 clips，
+ * 声像和循环预先烘进缓冲，按时间点的闪避变成 automation.gain，按电平的闪避交给 visualtone 的 duck。
  */
-export async function mixAudio(spec: AudioSpec, opts: MixOptions): Promise<MixResult> {
+export async function compileAudio(
+  spec: AudioSpec,
+  opts: { duration: number; baseDir?: string },
+): Promise<{ score: Score; clips: Record<string, ClipAudio>; inputs: MixResult['inputs'] }> {
   const sr = spec.sampleRate ?? 48000
-  const N = Math.ceil(opts.duration * sr)
   const baseDir = opts.baseDir ?? process.cwd()
-  const buses = new Map<string, Stereo>()
-  const busOf = (name: string) => {
-    let b = buses.get(name)
-    if (!b) buses.set(name, (b = stereo(N)))
-    return b
-  }
-  for (const name of Object.keys(spec.buses ?? {})) busOf(name)
-  const sources = new Map<AudioSource, Promise<Stereo>>()
-  for (const clip of spec.clips) {
-    let p = sources.get(clip.src)
-    if (!p) sources.set(clip.src, (p = loadSource(clip.src, sr, opts.duration, baseDir)))
-    placeClip(busOf(clip.bus ?? 'main'), await p, clip, sr)
+  const loaded = new Map<AudioSource, Promise<Loaded>>()
+  let anon = 0
+  const load = (src: AudioSource): Promise<Loaded> => {
+    let p = loaded.get(src)
+    if (!p) {
+      if (typeof src === 'string') {
+        const path = isAbsolute(src) ? src : resolve(baseDir, src)
+        p = Promise.all([decodeAudio(path, sr), readFile(path)]).then(([audio, bytes]) => ({ key: src, audio, sha256: sha(bytes) }))
+      } else {
+        const key = `fn:${src.name ?? 'source'}#${anon++}`
+        p = Promise.resolve(src.render({ sampleRate: sr, duration: opts.duration, length: Math.ceil(opts.duration * sr) })).then(
+          (audio) => ({ key, audio, sha256: sha(audio.l) }),
+        )
+      }
+      loaded.set(src, p)
+    }
+    return p
   }
 
-  const L = new Float32Array(N)
-  const R = new Float32Array(N)
-  for (const [name, b] of buses) {
-    const cfg = spec.buses?.[name] ?? {}
-    const g = dbToGain(cfg.gain ?? 0)
-    const ducks = cfg.duck == null ? [] : Array.isArray(cfg.duck) ? cfg.duck : [cfg.duck]
-    const curves = ducks.map((d) => duckGain(d, N, sr, buses))
-    for (let n = 0; n < N; n++) {
-      let k = g
-      for (const c of curves) k *= c[n]!
-      L[n]! += b.l[n]! * k
-      R[n]! += b.r[n]! * k
+  const clips: Record<string, ClipAudio> = {}
+  const inputs = new Map<string, string>()
+  const tracks = new Map<string, Track>()
+  const buses = spec.buses ?? {}
+  const trackOf = (name: string): Track => {
+    let t = tracks.get(name)
+    if (!t) {
+      const bus = buses[name]
+      t = { id: name, channel: [0, 1], role: roleOf(name, bus), clips: [] }
+      if (bus) Object.assign(t, pick(bus, ['eq', 'comp', 'space', 'room', 'echo']))
+      tracks.set(name, t)
+    }
+    return t
+  }
+
+  for (const clip of spec.clips ?? []) {
+    const busName = clip.bus ?? 'main'
+    const src = await load(clip.src)
+    inputs.set(src.key, src.sha256)
+    // visualtone 的片段不能从负时间开始，负的 at 折算成从音源中间取
+    const at = Math.max(0, clip.at ?? 0)
+    const offset = (clip.offset ?? 0) + Math.max(0, -(clip.at ?? 0))
+    const pan = clip.pan ?? 0
+    let key = src.key
+    let trim: [number, number] | undefined
+    const srcSec = src.audio.l.length / sr
+    if (clip.loop) {
+      const span = clip.duration ?? Math.max(0, opts.duration - at)
+      const looped = bake({ l: src.audio.l.subarray(Math.round(offset * sr)), r: src.audio.r.subarray(Math.round(offset * sr)) }, { pan, loopTo: span, sampleRate: sr })
+      key = `${src.key}@offset=${offset},loop=${span},pan=${pan}`
+      clips[key] = { sampleRate: sr, buffers: [looped.l, looped.r] }
+    } else {
+      if (pan !== 0) {
+        key = `${src.key}@pan=${pan}`
+        const panned = bake(src.audio, { pan, sampleRate: sr })
+        clips[key] ??= { sampleRate: sr, buffers: [panned.l, panned.r] }
+      } else clips[key] ??= { sampleRate: sr, buffers: [src.audio.l, src.audio.r], sha256: src.sha256 }
+      if (offset > 0 || clip.duration != null) trim = [offset, Math.min(srcSec, (clip.offset ?? 0) + (clip.duration ?? srcSec))]
+    }
+    const gain = dbToGain((clip.gain ?? 0) + (buses[busName]?.gain ?? 0))
+    trackOf(busName).clips!.push({
+      src: key,
+      at,
+      gain: Math.round(gain * 1e6) / 1e6,
+      fadeIn: clip.fadeIn ?? 0,
+      fadeOut: clip.fadeOut ?? 0,
+      ...(trim ? { trim } : {}),
+    })
+  }
+
+  const native = spec.tracks ?? []
+  const ids = new Set([...tracks.keys(), ...native.map((t) => t.id)])
+  for (const [name, bus] of Object.entries(buses)) {
+    const t = tracks.get(name)
+    const ducks = bus.duck == null ? [] : Array.isArray(bus.duck) ? bus.duck : [bus.duck]
+    if (!t) {
+      if (ducks.length || bus.gain) console.warn(`母线 ${name} 上没有片段，设置被忽略`)
+      continue
+    }
+    const by = ducks.filter((d) => d.by)
+    if (by.length > 1) throw new Error(`母线 ${name}：一条母线只能按一个来源闪避（duck.by）`)
+    const d = by[0]
+    if (d) {
+      if (!ids.has(d.by!)) throw new Error(`母线 ${name} 的 duck.by 指向不存在的母线或音轨：${d.by}`)
+      t.duck = {
+        by: d.by!,
+        amount: d.depth ?? 0.5,
+        holdMs: (d.hold ?? 0.25) * 1000,
+        releaseMs: (d.release ?? 0.18) * 1000,
+        ...(d.band ? { band: d.band } : {}),
+      }
+    }
+    const timed = ducks.filter((x) => x.times?.length)
+    if (timed.length) {
+      const curves = timed.map((x) => duckKeyframes(x, opts.duration))
+      t.automation = { gain: curves.length === 1 ? curves[0]! : multiplyKeyframes(curves) }
     }
   }
 
   const m = spec.master ?? {}
-  const mg = dbToGain(m.gain ?? 0)
-  const fi = (m.fadeIn ?? 0) * sr
-  const fo = (m.fadeOut ?? 0) * sr
-  let peak = 0
-  for (let n = 0; n < N; n++) {
-    let env = mg
-    if (fi > 0 && n < fi) env *= fadeCurve(n / fi)
-    if (fo > 0 && n > N - fo) env *= fadeCurve((N - n) / fo)
-    L[n]! *= env
-    R[n]! *= env
-    peak = Math.max(peak, Math.abs(L[n]!), Math.abs(R[n]!))
-  }
-  if (m.normalize != null && peak > 0) {
-    const k = dbToGain(m.normalize) / peak
-    for (let n = 0; n < N; n++) {
-      L[n]! *= k
-      R[n]! *= k
-    }
-  }
-  let limitedCount = 0
-  if (m.limit !== false) {
-    const c = dbToGain(m.limit ?? -0.5)
-    for (let n = 0; n < N; n++) {
-      if (Math.abs(L[n]!) > c * 0.85 || Math.abs(R[n]!) > c * 0.85) limitedCount++
-      L[n] = softLimit(L[n]!, c)
-      R[n] = softLimit(R[n]!, c)
-    }
-  }
-  return { l: L, r: R, sampleRate: sr, limited: N > 0 ? limitedCount / N : 0 }
+  const score = {
+    sampleRate: sr,
+    duration: opts.duration,
+    ...(spec.bpm ? { bpm: spec.bpm } : {}),
+    master: {
+      lufs: m.lufs ?? -16,
+      drive: m.drive ?? 0,
+      limiter: { ceiling: m.ceiling ?? -1 },
+      ...(m.reverb ? { reverb: m.reverb } : {}),
+      ...(m.room ? { room: m.room } : {}),
+      ...(m.delay ? { delay: m.delay } : {}),
+      ...(m.eq ? { eq: m.eq } : {}),
+      ...(m.comp ? { comp: m.comp } : {}),
+    },
+    tracks: [...tracks.values(), ...native.map((t) => ({ channel: [0, 1], ...t }))],
+  } as Score
+  return { score, clips, inputs: [...inputs].map(([src, sha256]) => ({ src, sha256 })) }
 }
 
-export type RenderAudioResult = { file: string; report: AudioReport; waveform?: string }
-
-/** 合成的音轨混成 WAV，同时写一份文字报告和波形图，供看不到、听不到声音的一方检查。 */
-export async function renderAudio(
-  comp: Composition,
-  outFile: string,
-  opts: { from?: number; to?: number; waveform?: boolean } = {},
-): Promise<RenderAudioResult> {
-  if (!comp.audio) throw new Error('合成没有定义 audio')
-  // 编曲可能依赖 setup 里的预计算（例如粒子闪光的时刻）
-  await prepare(comp)
-  const spec = typeof comp.audio === 'function' ? await comp.audio({ tl: comp.tl, duration: comp.duration }) : comp.audio
-  const mix = await mixAudio(spec, { duration: comp.duration, baseDir: comp.baseDir })
-  const sr = mix.sampleRate
-  const a = Math.round((opts.from ?? 0) * sr)
-  const b = Math.round((opts.to ?? comp.duration) * sr)
-  const cut: Stereo = { l: mix.l.subarray(a, b), r: mix.r.subarray(a, b) }
-  await mkdir(dirname(outFile), { recursive: true })
-  await writeFile(outFile, encodeWav(cut, sr))
-  const report = analyzeAudio(mix, sr, comp.tl, mix.limited)
-  let waveform: string | undefined
-  if (opts.waveform) {
-    const { dir, name } = parse(outFile)
-    waveform = join(dir, `${name}.waveform.png`)
-    await writeFile(waveform, drawWaveform(mix, sr, comp.tl))
+function multiplyKeyframes(curves: { t: number; v: number }[][]): { t: number; v: number }[] {
+  const at = (keys: { t: number; v: number }[], t: number) => {
+    if (t <= keys[0]!.t) return keys[0]!.v
+    for (let i = 1; i < keys.length; i++) {
+      const b = keys[i]!
+      if (t <= b.t) {
+        const a = keys[i - 1]!
+        return a.v + ((b.v - a.v) * (t - a.t)) / Math.max(1e-9, b.t - a.t)
+      }
+    }
+    return keys[keys.length - 1]!.v
   }
-  return { file: outFile, report, waveform }
+  const times = [...new Set(curves.flatMap((c) => c.map((k) => k.t)))].sort((a, b) => a - b)
+  return times.map((t) => ({ t, v: Math.round(curves.reduce((g, c) => g * at(c, t), 1) * 1e4) / 1e4 }))
+}
+
+const fadeCurve = (k: number) => Math.sin((Math.min(1, Math.max(0, k)) * Math.PI) / 2)
+
+/**
+ * 混音：AudioSpec → visualtone 乐谱 → 渲染。响度按 LUFS 对齐，限幅器兜底，
+ * 同样的输入永远得到同样的输出。总线淡入淡出在渲染之后做。
+ */
+export async function mixAudio(spec: AudioSpec, opts: MixOptions): Promise<MixResult> {
+  const { score, clips, inputs } = await compileAudio(spec, opts)
+  const parsed = ScoreSchema.parse(score)
+  const res = renderScore(parsed, {
+    clips,
+    stems: opts.stems,
+    envelopes: opts.envelopeFps ? { fps: opts.envelopeFps } : undefined,
+  })
+  const sr = res.sampleRate
+  const N = Math.ceil(opts.duration * sr)
+  const l = new Float32Array(N)
+  const r = new Float32Array(N)
+  l.set(res.buffers[0]!.subarray(0, N))
+  r.set((res.buffers[1] ?? res.buffers[0]!).subarray(0, N))
+  const fi = (spec.master?.fadeIn ?? 0) * sr
+  const fo = (spec.master?.fadeOut ?? 0) * sr
+  if (fi > 0 || fo > 0) {
+    for (let n = 0; n < N; n++) {
+      let g = 1
+      if (fi > 0 && n < fi) g *= fadeCurve(n / fi)
+      if (fo > 0 && n > N - fo) g *= fadeCurve((N - n) / fo)
+      l[n]! *= g
+      r[n]! *= g
+    }
+  }
+  return {
+    l,
+    r,
+    sampleRate: sr,
+    score,
+    lufs: res.master.loudnessDb,
+    limiterDb: res.master.limiterReductionDb,
+    envelopes: res.envelopes ? toEnvelopes(res.envelopes, opts.duration) : undefined,
+    stems: res.stems,
+    inputs,
+  }
+}
+
+/** 合成的 audio 字段求值。 */
+export async function audioSpecOf(comp: {
+  audio?: AudioSpec | ((ctx: { tl: Timeline; duration: number }) => AudioSpec | Promise<AudioSpec>)
+  tl: Timeline
+  duration: number
+}): Promise<AudioSpec | undefined> {
+  if (!comp.audio) return undefined
+  return typeof comp.audio === 'function' ? comp.audio({ tl: comp.tl, duration: comp.duration }) : comp.audio
 }

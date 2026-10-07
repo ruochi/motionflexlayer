@@ -4,7 +4,7 @@ import { availableParallelism } from 'node:os'
 import { dirname, join, parse, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadComposition } from '../composition.js'
-import { renderAudio } from '../audio/mixer.js'
+import { renderAudio, type RenderAudioResult } from '../audio/render.js'
 import { runFfmpeg } from './ffmpeg.js'
 import { IssueLog } from './issues.js'
 import type { WorkerJob, WorkerMessage } from './worker.js'
@@ -37,13 +37,14 @@ export type VideoResult = {
   frames: number
   seconds: number
   issues: IssueLog
-  audio?: string
+  audio?: RenderAudioResult
 }
 
 const workerUrl = new URL(import.meta.url.endsWith('.ts') ? './worker.ts' : './worker.js', import.meta.url)
 
 /**
- * 多进程渲染视频：帧区间平均切给 N 个进程，各自把 PNG 流进 ffmpeg 编成一段，最后无损拼接、混入音轨。
+ * 多进程渲染视频：帧区间平均切给 N 个进程，各自把 RGBA 流进 ffmpeg 编成一段，最后无损拼接、混入音轨。
+ * 合成写了 envelopes: true 时先混音，把包络发给每个进程；否则混音和画面并行。
  * 内存只占一帧，几分钟的片子也不会爆。
  */
 export async function renderVideo(opts: VideoOptions): Promise<VideoResult> {
@@ -69,8 +70,16 @@ export async function renderVideo(opts: VideoOptions): Promise<VideoResult> {
   let done = 0
 
   const wantAudio = (opts.audio ?? true) && comp.audio != null
-  const audioFile = wantAudio ? join(dir, `${name}.wav`) : undefined
-  const audioJob = audioFile ? renderAudio(comp, audioFile, { from: first / fps, to: last / fps }) : undefined
+  const audioFile = wantAudio || comp.envelopes ? join(dir, `${name}.wav`) : undefined
+  const audioJob = audioFile
+    ? renderAudio(comp, audioFile, { from: first / fps, to: last / fps, envelopes: comp.envelopes, waveform: true })
+    : undefined
+  let envelopeFile: string | undefined
+  if (comp.envelopes) {
+    const res = await audioJob!
+    envelopeFile = join(segDir, 'envelopes.json')
+    await writeFile(envelopeFile, JSON.stringify(res.envelopes))
+  }
 
   const segments: string[] = []
   const jobs: Promise<void>[] = []
@@ -90,6 +99,7 @@ export async function renderVideo(opts: VideoOptions): Promise<VideoResult> {
       crf: opts.crf ?? 16,
       preset: opts.preset ?? 'medium',
       out: seg,
+      envelopes: envelopeFile,
     }
     jobs.push(
       new Promise<void>((res, rej) => {
@@ -115,15 +125,15 @@ export async function renderVideo(opts: VideoOptions): Promise<VideoResult> {
       }),
     )
   }
-  await Promise.all([...jobs, audioJob])
+  const [audio] = await Promise.all([audioJob, ...jobs])
 
   await mkdir(dirname(out), { recursive: true })
   const list = join(segDir, 'list.txt')
   await writeFile(list, segments.map((s) => `file '${s.replace(/'/g, "'\\''")}'`).join('\n'))
   const args = ['-y', '-f', 'concat', '-safe', '0', '-i', list]
-  if (audioFile) args.push('-i', audioFile, '-map', '0:v', '-map', '1:a', '-c:a', 'aac', '-b:a', '256k', '-shortest')
+  if (audioFile && wantAudio) args.push('-i', audioFile, '-map', '0:v', '-map', '1:a', '-c:a', 'aac', '-b:a', '256k', '-shortest')
   args.push('-c:v', 'copy', '-movflags', '+faststart', out)
   await runFfmpeg(args)
   await rm(segDir, { recursive: true, force: true })
-  return { out, frames: total, seconds: (performance.now() - started) / 1000, issues, audio: audioFile }
+  return { out, frames: total, seconds: (performance.now() - started) / 1000, issues, audio }
 }

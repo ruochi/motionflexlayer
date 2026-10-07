@@ -1,6 +1,7 @@
 import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { h, type FvgChild, type FvgNode } from 'flexlayer'
+import { AudioFrame, type Envelopes } from './audio/envelopes.js'
 import type { AudioSpec } from './audio/types.js'
 import { ensureFonts } from './canvas.js'
 import { Timeline, type SectionState } from './timeline.js'
@@ -22,6 +23,8 @@ export type Frame = {
   beat: number
   /** 当前所在段落。没有登记段落时为 undefined。 */
   section?: SectionState
+  /** 音轨读数（电平、起音）。只有合成写了 envelopes: true 才有。 */
+  audio?: AudioFrame
 }
 
 export type RenderOutput = FvgChild | null | undefined | false | readonly RenderOutput[]
@@ -48,6 +51,11 @@ export type CompositionSpec = {
   root?: Record<string, string | number>
   timeline?: Timeline
   audio?: AudioSpec | ((ctx: { tl: Timeline; duration: number }) => AudioSpec | Promise<AudioSpec>)
+  /**
+   * 画面要跟着声音动时设 true：渲染前先混一遍音，帧函数里用 f.audio 读各母线的电平和起音。
+   * 包络只算一次，多进程渲染时由主进程算好发给 worker。
+   */
+  envelopes?: boolean
   lint?: LintProfile
   /** 相对路径（图片、音频文件）的基准目录。CLI 加载时缺省为入口文件所在目录。 */
   baseDir?: string
@@ -77,7 +85,19 @@ export function totalFrames(comp: Composition): number {
   return Math.round(comp.duration * comp.fps)
 }
 
+const envelopeMap = new WeakMap<Composition, Envelopes>()
+
+/** 注入算好的包络。worker 进程用它跳过混音。 */
+export function setEnvelopes(comp: Composition, env: Envelopes): void {
+  envelopeMap.set(comp, env)
+}
+
+export function envelopesOf(comp: Composition): Envelopes | undefined {
+  return envelopeMap.get(comp)
+}
+
 export function frameAt(comp: Composition, t: number): Frame {
+  const env = envelopeMap.get(comp)
   return {
     t,
     frame: Math.round(t * comp.fps),
@@ -89,18 +109,37 @@ export function frameAt(comp: Composition, t: number): Frame {
     tl: comp.tl,
     beat: comp.tl.beatAt(t),
     section: comp.tl.sectionAt(t),
+    audio: env ? new AudioFrame(env, t) : undefined,
   }
 }
 
 const setupDone = new WeakMap<Composition, Promise<void>>()
+const envelopesDone = new WeakMap<Composition, Promise<void>>()
 
-export function prepare(comp: Composition): Promise<void> {
+/**
+ * 每个进程渲染前调用一次：字体、setup，以及（envelopes: true 时）混一遍音拿包络。
+ * 只混音时传 { envelopes: false }，避免混两遍。
+ */
+export function prepare(comp: Composition, opts: { envelopes?: boolean } = {}): Promise<void> {
   let p = setupDone.get(comp)
   if (!p) {
     p = ensureFonts().then(() => comp.setup?.())
     setupDone.set(comp, p)
   }
-  return p
+  if (!comp.envelopes || opts.envelopes === false || envelopeMap.has(comp)) return p
+  let e = envelopesDone.get(comp)
+  if (!e) {
+    e = p.then(async () => {
+      if (envelopeMap.has(comp)) return
+      const { audioSpecOf, mixAudio } = await import('./audio/mixer.js')
+      const spec = await audioSpecOf(comp)
+      if (!spec) throw new Error('envelopes: true 需要合成定义 audio')
+      const mix = await mixAudio(spec, { duration: comp.duration, baseDir: comp.baseDir, envelopeFps: comp.fps })
+      envelopeMap.set(comp, mix.envelopes!)
+    })
+    envelopesDone.set(comp, e)
+  }
+  return e
 }
 
 export function flatten(out: RenderOutput, into: FvgChild[] = []): FvgChild[] {

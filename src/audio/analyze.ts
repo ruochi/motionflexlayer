@@ -1,13 +1,19 @@
 import { createCanvas, DEFAULT_FONT } from '../canvas.js'
 import type { Timeline } from '../timeline.js'
+import type { AnalysisReport, Finding } from 'visualtone'
 import type { Stereo } from './types.js'
 
 export type LevelStat = { peak: number; rms: number }
 
 export type AudioReport = LevelStat & {
   duration: number
-  /** 被限幅器压过的采样比例。 */
-  limited: number
+  /** 积分响度，LUFS。 */
+  lufs: number
+  /** 限幅器最深压了多少 dB。 */
+  limiterDb: number
+  /** visualtone 的混音诊断（响度、频段、旁白与音乐的频段间隔、音效密度）。 */
+  findings: Finding[]
+  voiceover?: AnalysisReport['voiceover']
   sections: Array<LevelStat & { name: string; from: number; to: number }>
   /** 每秒的 RMS，dBFS。 */
   perSecond: number[]
@@ -33,7 +39,12 @@ function level(s: Stereo, a: number, b: number): LevelStat {
 }
 
 /** 电平报告：整体、分段、每秒、每个 cue 的瞬时跳变。 */
-export function analyzeAudio(s: Stereo, sr: number, tl?: Timeline, limited = 0): AudioReport {
+export function analyzeAudio(
+  s: Stereo,
+  sr: number,
+  tl?: Timeline,
+  mix: { lufs?: number; limiterDb?: number; analysis?: AnalysisReport } = {},
+): AudioReport {
   const N = s.l.length
   const duration = N / sr
   const overall = level(s, 0, N)
@@ -50,15 +61,33 @@ export function analyzeAudio(s: Stereo, sr: number, tl?: Timeline, limited = 0):
     const n = Math.round(c.t * sr)
     return { name: c.name, t: c.t, jump: Math.round((level(s, n, n + w).rms - level(s, n - w, n).rms) * 10) / 10 }
   })
-  return { ...overall, duration, limited, sections, perSecond, cues }
+  return {
+    ...overall,
+    duration,
+    lufs: mix.lufs ?? mix.analysis?.loudness.integratedLufs ?? NaN,
+    limiterDb: mix.limiterDb ?? 0,
+    findings: mix.analysis?.findings ?? [],
+    voiceover: mix.analysis?.voiceover,
+    sections,
+    perSecond,
+    cues,
+  }
 }
 
 export function formatAudioReport(r: AudioReport, maxCues = 24): string {
   const f = (v: number) => v.toFixed(1).padStart(6)
   const lines = [
-    `音频 ${r.duration.toFixed(2)}s  峰值 ${r.peak.toFixed(1)} dBFS  RMS ${r.rms.toFixed(1)} dBFS  限幅 ${(r.limited * 100).toFixed(2)}%`,
+    `音频 ${r.duration.toFixed(2)}s  响度 ${r.lufs.toFixed(1)} LUFS  峰值 ${r.peak.toFixed(1)} dBFS  RMS ${r.rms.toFixed(1)} dBFS  限幅 ${r.limiterDb.toFixed(1)} dB`,
   ]
-  if (r.limited > 0.01) lines.push('  ⚠ 限幅超过 1%：整体太响，降低母线或片段增益')
+  if (r.limiterDb > 3) lines.push('  ⚠ 限幅器压了 3 dB 以上：某处太冲，降低那里的片段增益')
+  const vo = r.voiceover
+  if (vo) {
+    const n = (v: number | null, d = 1) => (v == null ? '—' : v.toFixed(d))
+    lines.push(
+      `  旁白：1–4 kHz 高出音乐 ${n(vo.presenceGapDb)} dB  音效 ${n(vo.sfxPer10s)} 个/10s  最短间隔 ${n(vo.sfxMinGapSec, 2)}s`,
+    )
+  }
+  for (const f of r.findings) lines.push(`  ${f.severity === 'high' ? '⚠' : '·'} ${f.message}  → ${f.suggestion}`)
   if (r.sections.length) {
     lines.push('  段落            RMS    峰值')
     for (const s of r.sections) lines.push(`  ${s.name.padEnd(12)} ${f(s.rms)} ${f(s.peak)}   ${s.from.toFixed(2)}–${s.to.toFixed(2)}s`)

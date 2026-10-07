@@ -1,14 +1,16 @@
-import { h, type FvgNode } from 'flexlayer'
+import { type FvgNode } from 'flexlayer'
 import { describe, expect, it } from 'vitest'
+import { defineComposition } from '../src/composition.js'
 import { camera, css, fx, place, typewriter } from '../src/nodes.js'
-import { renderRaw } from '../src/render/raw.js'
+import { renderRgba } from '../src/render/frame.js'
 
 const W = 400
 const H = 200
 
-/** 读一个像素的 RGB。画面背景不透明，预乘与否不影响。 */
+/** 读一个像素的 RGB。 */
 async function pixel(node: FvgNode, x: number, y: number): Promise<[number, number, number]> {
-  const { rgba, width } = await renderRaw(h('layer', { width: W, height: H, background: '#000000' }, node), {})
+  const comp = defineComposition({ width: W, height: H, duration: 1, background: '#000000', render: () => node })
+  const { rgba, width } = await renderRgba(comp, 0)
   const i = (y * width + x) * 4
   return [rgba[i]!, rgba[i + 1]!, rgba[i + 2]!]
 }

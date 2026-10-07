@@ -196,6 +196,6 @@ export default defineComposition({
       ...sfx('../assets/chime.wav', tl.times('total'), { gain: -5 }),
     ],
     buses: { music: { duck: { times: tl.times('bar'), depth: 0.3, release: 0.12 } } },
-    master: { fadeOut: 0.8, limit: -0.8 },
+    master: { lufs: -16, fadeOut: 0.8 },
   }),
 })

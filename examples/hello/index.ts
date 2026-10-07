@@ -247,6 +247,6 @@ export default defineComposition({
       // 音乐给底鼓让路：和画面的脉冲用同一组时间
       music: { duck: { times: tl.times('kick'), depth: 0.55, release: 0.16 } },
     },
-    master: { fadeOut: 1.5, limit: -0.8 },
+    master: { lufs: -16, fadeOut: 1.5 },
   }),
 })

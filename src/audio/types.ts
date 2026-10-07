@@ -1,3 +1,5 @@
+import type { Track } from 'visualtone'
+
 export type Stereo = { l: Float32Array; r: Float32Array }
 
 export type SourceContext = {
@@ -31,52 +33,71 @@ export type AudioClip = {
   /** 淡入、淡出，秒。 */
   fadeIn?: number
   fadeOut?: number
-  /** 进哪条母线。默认 'main'。 */
+  /** 进哪条母线。默认 'main'。旁白放 'voice'，配乐放 'music'。 */
   bus?: string
   /** 只用于报告。 */
   label?: string
 }
 
 /**
- * 闪避（ducking）：在指定时刻把母线音量压下去再放回来。
+ * 闪避（ducking）。
  * - times：按时间点闪避，最常见的是给底鼓让路，传 tl.times('kick')。画面脉冲用同一组时间。
- * - by：按另一条母线的电平闪避（侧链），人声来了压低音乐。
+ * - by：按另一条母线（或 tracks 里的音轨）的电平闪避，旁白来了压低音乐。
  */
 export type Duck = {
   times?: readonly number[]
   by?: string
   /** 最多压掉多少，0..1。默认 0.5。 */
   depth?: number
-  /** 秒。默认 0.008。 */
+  /** times 模式：起压时间，秒。默认 0.008。 */
   attack?: number
-  /** 压住后保持多久，秒。默认 0。 */
+  /** 压住后保持多久，秒。by 模式默认 0.25，避免旁白字间一松一紧。 */
   hold?: number
-  /** 恢复时间常数，秒。默认 0.18。 */
+  /** 恢复时间，秒。默认 0.18。 */
   release?: number
-  /** by 模式：触发电平，dBFS。默认 -30。 */
-  threshold?: number
+  /** by 模式：只压这个频段（Hz），其余频段原样保留。给旁白让路写 [1000, 4000]。 */
+  band?: [number, number]
 }
 
-export type AudioBus = {
+/** 母线编译成 visualtone 的一条音轨，下面这些字段原样交给它。 */
+type TrackStrip = Pick<Track, 'eq' | 'comp' | 'space' | 'room' | 'echo'>
+
+export type AudioBus = TrackStrip & {
   /** dB。 */
   gain?: number
   duck?: Duck | Duck[]
+  /** 分析时按这个归类。缺省按名字猜：voice/vo → voice，music/bgm → music，sfx/fx → sfx。 */
+  role?: 'voice' | 'music' | 'sfx'
 }
 
 export type MasterOptions = {
-  /** dB。 */
-  gain?: number
+  /** 目标响度，LUFS（BS.1770 积分响度）。默认 -16。 */
+  lufs?: number
+  /** 限幅器天花板，dBFS。默认 -1。 */
+  ceiling?: number
+  /** 总线饱和 0..1。默认 0，旁白要干净。 */
+  drive?: number
   fadeIn?: number
   fadeOut?: number
-  /** 先把峰值归一到这个 dBFS（例如 -1），再进限幅。缺省不归一。 */
-  normalize?: number
-  /** 软限幅的天花板，dBFS。默认 -0.5。设 false 关闭。 */
-  limit?: number | false
+  reverb?: NonNullable<VisualtoneMaster>['reverb']
+  room?: NonNullable<VisualtoneMaster>['room']
+  delay?: NonNullable<VisualtoneMaster>['delay']
+  eq?: NonNullable<VisualtoneMaster>['eq']
+  comp?: NonNullable<VisualtoneMaster>['comp']
 }
+
+type VisualtoneMaster = import('visualtone').Score['master']
 
 export type AudioSpec = {
   sampleRate?: number
-  clips: AudioClip[]
+  /** 只在 tracks 里用了小节记法（at: "4:2"、len: "1/8"）时需要。通常传 tl.bpm。 */
+  bpm?: number
+  clips?: AudioClip[]
   buses?: Record<string, AudioBus>
+  /**
+   * 直接写 visualtone 的音轨：音符、曲线、内置音效（sfx: whoosh / riser / impact / pop / tick……）。
+   * id 和母线共用一个命名空间，duck.by 可以互相引用。
+   */
+  tracks?: Track[]
   master?: MasterOptions
 }

@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { basename, extname, join, resolve } from 'node:path'
 import { loadComposition, type Composition } from './composition.js'
 import { formatAudioReport } from './audio/analyze.js'
-import { renderAudio } from './audio/mixer.js'
+import { renderAudio } from './audio/render.js'
 import { renderFrame } from './render/frame.js'
 import { IssueLog } from './render/issues.js'
 import { renderStills } from './render/stills.js'
@@ -124,6 +124,7 @@ async function main() {
     })
     console.log(`完成 ${res.frames} 帧，用时 ${res.seconds.toFixed(1)}s`)
     console.log(res.issues.format())
+    if (res.audio) console.log(formatAudioReport(res.audio.report))
     console.log(res.out)
     return
   }
@@ -133,6 +134,7 @@ async function main() {
     const res = await renderAudio(comp, out, { waveform: true })
     console.log(formatAudioReport(res.report))
     console.log(res.file)
+    console.log(`乐谱 ${res.scoreFile}`)
     if (res.waveform) console.log(`波形 ${res.waveform}`)
     return
   }

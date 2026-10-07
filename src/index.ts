@@ -28,6 +28,8 @@ export {
   frameAt,
   nodeAt,
   prepare,
+  setEnvelopes,
+  envelopesOf,
   totalFrames,
   flatten,
   type Composition,
@@ -74,12 +76,14 @@ export {
   type TextPointsOptions,
 } from './drawkit.js'
 export { DEFAULT_FONT, createCanvas, loadImage, registerFont, ensureFonts, type Canvas2D, type OffscreenCanvas } from './canvas.js'
-export { renderFrame, type FrameResult } from './render/frame.js'
+export { renderFrame, renderRgba, type FrameResult, type RgbaFrame } from './render/frame.js'
 export { renderStills, contactSheet, type StillsOptions, type StillsResult } from './render/stills.js'
 export { renderVideo, type VideoOptions, type VideoResult } from './render/video.js'
 export { IssueLog, type IssueStat } from './render/issues.js'
 export { ffmpegPath } from './render/ffmpeg.js'
-export { mixAudio, renderAudio, sfx, dbToGain, gainToDb, type MixResult, type MixOptions } from './audio/mixer.js'
+export { mixAudio, compileAudio, audioSpecOf, duckKeyframes, sfx, dbToGain, gainToDb, type MixResult, type MixOptions } from './audio/mixer.js'
+export { renderAudio, type RenderAudioResult } from './audio/render.js'
+export { AudioFrame, type Envelopes } from './audio/envelopes.js'
 export { analyzeAudio, formatAudioReport, drawWaveform, type AudioReport } from './audio/analyze.js'
 export { encodeWav } from './audio/wav.js'
 export { decodeAudio } from './audio/decode.js'
