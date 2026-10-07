@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, parse } from 'node:path'
-import { analyze } from 'visualtone'
+import { analyze, expandSfx, ScoreSchema } from 'visualtone'
 import { prepare, type Composition } from '../composition.js'
 import { analyzeAudio, drawWaveform, type AudioReport } from './analyze.js'
 import type { Envelopes } from './envelopes.js'
@@ -44,13 +44,13 @@ export async function renderAudio(
   await writeFile(outFile, encodeWav(cut, sr))
 
   const hasVoice = mix.score.tracks.some((t) => t.role === 'voice')
+  // 分轨的 id 是展开后的（fx:whoosh-1……），分析要用展开后的乐谱才对得上 role
   const analysis = analyze({
     buffers: [mix.l, mix.r],
     sampleRate: sr,
     stems: mix.stems,
-    score: mix.score,
+    score: expandSfx(ScoreSchema.parse(mix.score)),
     profile: hasVoice ? 'voiceover-bed' : undefined,
-    inputs: undefined,
   }).report
   const report = analyzeAudio(mix, sr, comp.tl, { lufs: mix.lufs, limiterDb: mix.limiterDb, analysis })
 

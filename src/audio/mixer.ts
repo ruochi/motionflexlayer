@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import { isAbsolute, resolve } from 'node:path'
+import { isAbsolute, relative, resolve } from 'node:path'
 import { render as renderScore, ScoreSchema, type ClipAudio, type Score, type Track } from 'visualtone'
 import type { Timeline } from '../timeline.js'
 import { decodeAudio } from './decode.js'
@@ -141,7 +141,7 @@ export async function compileAudio(
     if (!p) {
       if (typeof src === 'string') {
         const path = isAbsolute(src) ? src : resolve(baseDir, src)
-        p = Promise.all([decodeAudio(path, sr), readFile(path)]).then(([audio, bytes]) => ({ key: src, audio, sha256: sha(bytes) }))
+        p = Promise.all([decodeAudio(path, sr), readFile(path)]).then(([audio, bytes]) => ({ key: relative(baseDir, path), audio, sha256: sha(bytes) }))
       } else {
         const key = `fn:${src.name ?? 'source'}#${anon++}`
         p = Promise.resolve(src.render({ sampleRate: sr, duration: opts.duration, length: Math.ceil(opts.duration * sr) })).then(

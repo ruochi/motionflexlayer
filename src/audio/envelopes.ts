@@ -20,6 +20,24 @@ export function toEnvelopes(raw: RawEnvelopes, duration: number): Envelopes {
   for (const [id, tr] of Object.entries(raw.tracks)) {
     tracks[id] = { onsets: tr.onsets.map(round).sort((a, b) => a - b), level: Array.from(tr.level, round) }
   }
+  // 音效轨在 visualtone 里按事件展开成 fx:whoosh-1、fx:impact-7:low……，这里按前缀合回一条
+  const groups = new Map<string, string[]>()
+  for (const id of Object.keys(raw.tracks)) {
+    const i = id.indexOf(':')
+    if (i <= 0) continue
+    const g = id.slice(0, i)
+    if (!raw.tracks[g]) groups.set(g, [...(groups.get(g) ?? []), id])
+  }
+  for (const [g, ids] of groups) {
+    const n = raw.master.level.length
+    const level = new Array<number>(n).fill(0)
+    for (const id of ids) {
+      const lv = raw.tracks[id]!.level
+      for (let k = 0; k < n; k++) level[k]! += (lv[k] ?? 0) ** 2
+    }
+    const onsets = [...new Set(ids.flatMap((id) => tracks[id]!.onsets))].sort((a, b) => a - b)
+    tracks[g] = { onsets, level: level.map((v) => round(Math.sqrt(v))) }
+  }
   return { fps: raw.fps, duration, tracks, master: { level: Array.from(raw.master.level, round) } }
 }
 
@@ -32,6 +50,11 @@ export class AudioFrame {
     private readonly env: Envelopes,
     readonly t: number,
   ) {}
+
+  /** 另一时刻的读数。画电平历史（滚动波形）时用：f.audio.at(f.t - k / fps).level('voice')。 */
+  at(t: number): AudioFrame {
+    return new AudioFrame(this.env, t)
+  }
 
   /** 有包络的音轨名。 */
   get tracks(): string[] {

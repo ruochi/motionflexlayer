@@ -88,3 +88,5 @@ export { analyzeAudio, formatAudioReport, drawWaveform, type AudioReport } from 
 export { encodeWav } from './audio/wav.js'
 export { decodeAudio } from './audio/decode.js'
 export type { AudioSpec, AudioClip, AudioBus, AudioSource, Duck, MasterOptions, Stereo, SourceContext } from './audio/types.js'
+export { narration, alignWords, Narration, type NarrationLine, type NarrationOptions, type PlannedLine, type PlannedWord, type Caption } from './voice/narration.js'
+export { edgeTts, synthesizeCached, probeDuration, ttsKey, type TtsEngine, type TtsRequest, type TtsResult, type SpokenWord } from './voice/tts.js'
