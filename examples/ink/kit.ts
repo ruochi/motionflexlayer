@@ -64,6 +64,34 @@ export function glyphAt(g: Glyph, p: GlyphPose, attrs: Record<string, string | n
   )
 }
 
+export type Bounds = { left: number; top: number; right: number; bottom: number }
+
+/** 相对中心的局部框，绕中心缩放、旋转后放到 (x, y)，在画布上的外接框。 */
+export function poseBounds(local: Bounds, p: { x: number; y: number; rotate?: number; scale?: number }): Bounds {
+  const s = p.scale ?? 1
+  const r = ((p.rotate ?? 0) * Math.PI) / 180
+  const cos = Math.cos(r)
+  const sin = Math.sin(r)
+  const xs: number[] = []
+  const ys: number[] = []
+  for (const [u, v] of [[local.left, local.top], [local.right, local.top], [local.right, local.bottom], [local.left, local.bottom]] as const) {
+    xs.push(p.x + s * (cos * u - sin * v))
+    ys.push(p.y + s * (sin * u + cos * v))
+  }
+  return { left: Math.min(...xs), top: Math.min(...ys), right: Math.max(...xs), bottom: Math.max(...ys) }
+}
+
+/** glyphAt 摆好的字形，着墨在画布上的外接框。 */
+export function glyphInk(g: Glyph, p: GlyphPose): Bounds {
+  const ink = g.ink ?? { x: 0, y: 0, width: g.width, height: g.height }
+  const left = ink.x - g.width / 2
+  const top = ink.y - g.height / 2
+  return poseBounds({ left, top, right: left + ink.width, bottom: top + ink.height }, p)
+}
+
+/** 离画布四边最近的距离。描边、阴影外扩超过它就会被画布切掉。 */
+export const roomTo = (b: Bounds) => Math.min(b.left, b.top, W - b.right, H - b.bottom)
+
 /** 字身中心在 p、半径约 r 的字有没有伸出画布。用来决定这一帧要不要写 overflow-canvas 的 expect。 */
 export const offCanvas = (p: { x: number; y: number; scale?: number }, r = 36) => {
   const k = r * (p.scale ?? 1)

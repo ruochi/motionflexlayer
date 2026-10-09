@@ -10,7 +10,7 @@
  */
 import { canvas, glyph, h, type Glyph, type PlacedLine } from 'flexlayer'
 import { clamp, fade, fx, hash, lerp, mixColor, place, progress, pulse, rgba, spring, text, tween, wiggle, type Child, type Frame } from 'motionflexlayer'
-import { at, C, glyphAt, H, L, LATIN, offCanvas, pathLength, seal, sheet, W } from './kit.js'
+import { at, C, glyphAt, glyphInk, H, L, LATIN, offCanvas, pathLength, roomTo, seal, sheet, W } from './kit.js'
 
 export const P = '先排版，再拆字。每个字都知道自己落在哪一行、哪一格。笔画着墨之处，就是它该在的地方。'
 const CHARS = [...P]
@@ -338,6 +338,12 @@ function sticker(f: Frame): Child[] {
   const bump = pulse(t, [T_POP], 7, 0.05)
   const lift = progress(t, T_POP, T_POP + 0.4, 'outCubic')
   const flooding = t > T_FLOOD - 0.05
+  const stickInk = STICK_IDX.map((i, n) => glyphInk(SHAPES[i]!, stickerPose(n, t))).reduce((a, b) => ({
+    left: Math.min(a.left, b.left),
+    top: Math.min(a.top, b.top),
+    right: Math.max(a.right, b.right),
+    bottom: Math.max(a.bottom, b.bottom),
+  }))
   const fall: Child[] = []
   let out = false
   CHARS.forEach((_, i) => {
@@ -357,7 +363,7 @@ function sticker(f: Frame): Child[] {
         scale: bump > 0.001 ? 1 + 0.08 * bump : undefined,
         origin: `${W / 2} ${CY}`,
         opacity: 1 - progress(t, L.glass.from + 0.2, L.glass.from + 0.6),
-        expect: w2 > 400 ? 'effect-clipped: 描边漫出画面做转场' : undefined,
+        expect: w2 > roomTo(stickInk) ? 'effect-clipped: 描边漫出画面做转场' : undefined,
       },
       ...STICK_IDX.map((i, n) => glyphAt(SHAPES[i]!, { ...stickerPose(n, t), fill })),
     ),
