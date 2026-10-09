@@ -2,12 +2,10 @@ import { createContext, createElement as e, Fragment, useContext, type ReactElem
 import type { DrawFn, FvgChild, FvgNode } from 'flexlayer'
 import type { Frame } from '../composition.js'
 import {
-  camera,
   css,
   place,
   reveal,
   rollLayout,
-  type CameraOptions,
   type PlaceOptions,
   type RevealOptions,
   type RollOptions,
@@ -107,16 +105,6 @@ export function Fx({ draw, width, height, x, y, name, id }: FxProps): ReactEleme
   const w = width ?? f.width
   const hh = height ?? f.height
   return e(name ?? 'fx', { id, x: x ?? w / 2, y: y ?? hh / 2, anchor: 'center', width: w, height: hh, draw })
-}
-
-export type CameraProps = Omit<CameraOptions, 'width' | 'height'> & { width?: number; height?: number; children?: ReactNode }
-
-/** 见核心的 camera()。 */
-export function Camera({ children, width, height, ...opts }: CameraProps): ReactElement {
-  const f = useFrame()
-  const n = camera({ ...opts, width: width ?? f.width, height: height ?? f.height })
-  const inner = n.children[0] as FvgNode
-  return e('layer', n.attrs, e('layer', inner.attrs, children))
 }
 
 export type RevealProps = RevealOptions & { children?: ReactNode }

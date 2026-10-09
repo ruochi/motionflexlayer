@@ -1,8 +1,8 @@
 import { type FvgNode } from 'flexlayer'
 import { describe, expect, it } from 'vitest'
 import { defineComposition } from '../src/composition.js'
-import { camera, css, fx, place, typewriter } from '../src/nodes.js'
-import { renderRgba } from '../src/render/frame.js'
+import { css, fx, h, place, shot, typewriter, type Shot } from '../src/nodes.js'
+import { renderFrame, renderRgba } from '../src/render/frame.js'
 
 const W = 400
 const H = 200
@@ -47,28 +47,53 @@ describe('typewriter', () => {
   })
 })
 
-describe('camera', () => {
-  it('不动时世界坐标就是屏幕坐标', async () => {
-    expect(await pixel(camera({ width: W, height: H }, dot(100, 50)), 100, 50)).toEqual([255, 0, 0])
+describe('shot', () => {
+  const frame = (cam: Shot, ...children: FvgNode[]) => h('layer', { width: W, height: H, view: cam.view }, h('layer', cam.stage, ...children))
+
+  it('不动时舞台坐标就是屏幕坐标', async () => {
+    const cam = shot({ width: W, height: H })
+    expect(cam.view).toBe(`0 0 ${W} ${H}`)
+    expect(await pixel(frame(cam, dot(100, 50)), 100, 50)).toEqual([255, 0, 0])
   })
 
   it('对准 (x, y) 并放大：该点落在画面中心，尺寸按 zoom 放大', async () => {
-    const node = camera({ width: W, height: H, x: 300, y: 50, zoom: 2 }, dot(300, 50))
+    const cam = shot({ width: W, height: H, x: 300, y: 80, zoom: 2 })
+    const node = frame(cam, dot(300, 80))
     expect(await pixel(node, W / 2, H / 2)).toEqual([255, 0, 0])
     expect(await pixel(node, W / 2 + 8, H / 2)).toEqual([255, 0, 0])
     expect(await pixel(node, W / 2 + 14, H / 2)).toEqual([0, 0, 0])
+    expect(cam.toScreen(300, 80)).toEqual([W / 2, H / 2])
   })
 
   it('震屏是屏幕空间偏移，不受 zoom 影响', async () => {
-    const node = camera({ width: W, height: H, x: 300, y: 50, zoom: 4, shakeX: 30 }, dot(300, 50))
-    expect(await pixel(node, W / 2 + 30, H / 2)).toEqual([255, 0, 0])
+    const cam = shot({ width: W, height: H, x: 200, y: 100, zoom: 4, shakeX: 30 })
+    expect(await pixel(frame(cam, dot(200, 100)), W / 2 + 30, H / 2)).toEqual([255, 0, 0])
+    expect(cam.toScreen(200, 100)).toEqual([W / 2 + 30, H / 2])
   })
 
-  it('只用一层 layer，绕目标点旋转时目标仍在中心', async () => {
-    const node = camera({ width: W, height: H, x: 300, y: 50, zoom: 2, rotate: 30 }, dot(300, 50))
-    expect(node.children.every((c) => typeof c !== 'object' || (c as FvgNode).tag !== 'layer')).toBe(true)
-    expect(node.attrs.origin).toBe('300 50')
-    expect(await pixel(node, W / 2, H / 2)).toEqual([255, 0, 0])
+  it('对准舞台边缘或震屏时把 zoom 抬到刚好盖满，cover:false 保留原倍数', () => {
+    expect(shot({ width: W, height: H, x: 300, y: 100 }).zoom).toBeCloseTo(2)
+    expect(shot({ width: W, height: H, shakeX: 20 }).zoom).toBeCloseTo((W / 2 + 20) / (W / 2))
+    expect(shot({ width: W, height: H, x: 300, y: 100, cover: false }).zoom).toBe(1)
+  })
+
+  it('舞台绕目标点旋转：目标仍在中心，toScreen 跟着转', async () => {
+    const cam = shot({ width: W, height: H, x: 200, y: 100, zoom: 2, rotate: 30 })
+    expect(cam.stage.origin).toBe('200 100')
+    expect(await pixel(frame(cam, dot(200, 100)), W / 2, H / 2)).toEqual([255, 0, 0])
+    const [sx, sy] = cam.toScreen(240, 100)
+    expect(await pixel(frame(cam, dot(240, 100)), Math.round(sx), Math.round(sy))).toEqual([255, 0, 0])
+    expect(sy).toBeGreaterThan(H / 2)
+  })
+
+  it('盖满时 flexlayer 不报 view-outside，不盖满时报', async () => {
+    const issues = async (cam: Shot) => {
+      const comp = defineComposition({ width: W, height: H, duration: 1, render: () => frame(cam, dot(200, 100)) })
+      const { report } = await renderFrame(comp, 0, { scale: 0.25 })
+      return report.issues.map((i) => i.code)
+    }
+    expect(await issues(shot({ width: W, height: H, zoom: 1.5, rotate: 12, shakeX: 9, shakeY: -6 }))).not.toContain('view-outside')
+    expect(await issues(shot({ width: W, height: H, rotate: 12, cover: false }))).toContain('view-outside')
   })
 })
 

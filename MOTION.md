@@ -56,7 +56,7 @@
 
 | 层 | 用什么 | 负责 |
 | --- | --- | --- |
-| 结构 | `layer`、HTML 文字、`div` 的 flex，以及 `place` / `camera` / `roll` / `reveal` / `typewriter` | 有哪些东西、在哪、什么时候出现、怎么排 |
+| 结构 | `layer`、HTML 文字、`div` 的 flex，以及 `place` / `roll` / `reveal` / `typewriter`；镜头用 `view` 取景，参数由 `shot()` 算 | 有哪些东西、在哪、什么时候出现、怎么排 |
 | 像素 | `draw` 回调：`fx()` 或任意自定义标签 | 笔触、粒子、光效、数据图、3D 点云 |
 | 时间 | `timeline()`、`progress` / `fade` / `spring` / `pulse` / `stagger` | 一切数值随 t 变化 |
 | 声音 | `audio.clips`、`buses`、`duck`、`tracks` | 旁白、音乐、音效放到 cue 上，由 visualtone 混音 |
@@ -73,11 +73,12 @@
 | 定位用 `x`、`y`、`anchor` | `h('layer', { cx: 960, cy: 540 })` | `place({ x: 960, y: 540 })`（默认 `anchor: 'center'`），原始节点写 `h('layer', { x: 960, y: 540, anchor: 'center' })` | flexlayer 0.2 起 `cx`、`cy` 在 layer 上无效，报 `invalid-attr` |
 | 嵌套 `layer` 只定位，不排版 | 一个 `layer` 里并排放两段文字 | `place({…}, box({ display: 'flex', gap: 12 }, a, b))` | 文字叠在一起，报 `text-overlap` |
 | 嵌套 `layer` 不填背景 | `h('layer', { background: '#fff' })` | 用 `rect`、HTML `background` 或 `draw` | `invalid-attr` |
-| 镜头里不放 `blur` / `mask` / `grade` / `glass` | `camera({ zoom: 16 }, reveal(…))` | 带这些效果的元素放到镜头外，或者在 zoom 不大的时候用 | 离屏画布按放大后的尺寸分配，单帧可能慢到几百毫秒 |
+| 推镜、震屏用取景窗，不缩放整个画面 | `place({ x: 960, y: 540, width: W, height: H, scale: zoom, origin: [x, y] }, …scene)` | `const cam = shot({ width: W, height: H, x, y, zoom })`，再写 `h('layer', { width: W, height: H, view: cam.view }, h('layer', cam.stage, …scene))` | 出画的元素每帧报 `overflow-canvas`，字号按名义大小查，露底也查不出来 |
+| 章节、字幕、标注写在取景窗外 | 把字幕放进舞台层，跟着镜头一起放大 | 取景窗外用成片像素；要跟住舞台上的一点用 `cam.toScreen(x, y)` | 字幕跟着推近、震动，读不清 |
+| 舞台里不放 `blur` / `mask` / `grade` / `glass` 再推很近 | `shot({ zoom: 16 })` 推向一张带 `mask` 的卡片 | 带这些效果的元素放到舞台外，或者只在 zoom 不大的时候用；调色写在取景窗那层上 | 离屏画布按放大后的尺寸分配，16 倍时单帧多出约 400ms |
 | 动画文字不换行 | 让 `p` 自动折行 | `text()` 默认 `white-space:nowrap` | 字距、字号变化时整段重排，画面跳动 |
 | 逐字动画放在 `draw` 里 | 给 `span` 写 `transform` | `drawGlyphs(ctx, str, { each })` | `span` 不支持变换，属性被忽略 |
-| 要描边、投影的字形每个一层 `layer` | `h('g', { transform }, h('path', { d }))` 放进带 `ink-stroke` 的 layer | 每个字形一层 `layer`，写 `x`、`y`、`rotate`、`scale`（见 `examples/ink/kit.ts` 的 `glyphAt`） | flexlayer 0.2.20 合并子树墨迹时不进 `g`，描边、`shadow`、`glow` 都不出现 |
-| 在 `canvas.create` 的结果里按文字找字 | 按原文的序号数 `lines[].chars` | 把 `chars[].text` 拼起来，`indexOf` 找到要的那几个字 | 折行处的空格不占格，序号会错开；竖排时 `lines` 是一格一项，按 `x` 分列 |
+| 在 `canvas.create` 的结果里按 id 找字 | 按原文的序号数 `lines[].chars` | 要找的字包一层 `<span id="here">`，取 `chars.filter((c) => c.id === 'here')` | 折行处的空格不占格，序号会错开；竖排时 `lines` 是一格一项，按 `x` 分列 |
 | `draw` 里不重置变换 | `ctx.setTransform(1, 0, 0, 1, 0, 0)`、`ctx.reset()` | 用 `ctx.save()` / `translate` / `restore()` | 破坏 flexlayer 的定位和 `scale` 倍率，导出半分辨率时位置错乱 |
 | `draw` 里不分配大对象 | 每帧 `createCanvas(1920, 1080)` | 在模块顶层或 `setup` 里建好，复用 | 内存上涨，越来越慢 |
 | 看不见的元素就不输出 | 透明度为 0 的层仍然放进文档 | `place()` 在透明度约为 0 时返回 `null`；条件渲染写 `cond && node` | 白白排版、绘制 |
@@ -127,7 +128,7 @@ tl.cue('kick', tl.beats(16, 40))          // 第 16 到 39 拍，每拍一个底
 ### 第二步：帧函数
 
 ```ts
-import { defineComposition, camera, place, text, fx, progress, spring, pulse, wiggle } from 'motionflexlayer'
+import { defineComposition, h, shot, place, text, fx, progress, spring, pulse, wiggle } from 'motionflexlayer'
 
 export default defineComposition({
   width: 1920, height: 1080, fps: 60, duration: 24,
@@ -136,13 +137,17 @@ export default defineComposition({
   setup: async () => { /* 预计算 */ },
   render: (f) => {
     const hit = pulse(f.t, tl.times('impact'), 6)       // 冲击包络：1 → 0
+    const cam = shot({ width: 1920, height: 1080, zoom: 1 + 0.05 * hit, shakeX: wiggle(f.t, 18, 12 * hit, 1) })
     return [
-      camera({ width: 1920, height: 1080, zoom: 1 + 0.05 * hit, shakeX: wiggle(f.t, 18, 12 * hit, 1) },
-        fx({ width: 1920, height: 1080 }, (ctx) => { /* 背景、粒子 */ }),
-        place({ x: 960, y: 540 - (1 - spring(f.t - tl.at('title'))) * 80, opacity: progress(f.t, 2, 2.3) },
-          text('标题', { fontSize: 120, fontWeight: 800 })),
+      // 取景窗 + 舞台两层：窗口铺满画面，view 取舞台的一块
+      h('layer', { width: 1920, height: 1080, view: cam.view },
+        h('layer', cam.stage,
+          fx({ width: 1920, height: 1080 }, (ctx) => { /* 背景、粒子 */ }),
+          place({ x: 960, y: 540 - (1 - spring(f.t - tl.at('title'))) * 80, opacity: progress(f.t, 2, 2.3) },
+            text('标题', { fontSize: 120, fontWeight: 800 })),
+        ),
       ),
-      // HUD 放在镜头外，不跟着震
+      // HUD 写在取景窗外，用成片像素，不跟着震
     ]
   },
 })
@@ -266,7 +271,7 @@ npm run mfl -- render comp.ts                 # 成片
 - `text(str, style)`：单行文字。
 - `box(style, ...children)`：flex 容器。
 - `fx({ width, height, x, y, name }, draw)`：绘图层。
-- `camera({ width, height, x, y, zoom, rotate, shakeX, shakeY }, ...children)`：镜头。只有一层 layer：把世界坐标 `(x, y)` 平移到画面中心，再以它为 `origin` 缩放、旋转。
+- `shot({ width, height, stage, x, y, zoom, rotate, shakeX, shakeY, cover })`：镜头参数，纯函数。返回 `view`（写在取景窗那层）、`stage`（舞台层的宽高，有旋转时带 `rotate` 和 `origin`）、实际的 `zoom` 和 `toScreen(x, y)`。`(x, y)` 是舞台上要对准的点，落在取景窗中心；`shakeX`、`shakeY` 是成片像素；默认把 `zoom` 抬到刚好盖满舞台，`cover: false` 关掉。取景窗多大、放在哪、几个窗口取同一个舞台，都由调用方自己写。
 - `roll({ value, cell, size, axis, align }, items)`：滚动窗口。
 - `reveal({ progress, width, height, direction, feather }, ...children)`：蒙版擦除。
 - `typewriter(tokens, shown, style)`：打字机。
@@ -311,15 +316,16 @@ npm run mfl -- render comp.ts                 # 成片
 
 问题码来自 flexlayer 的报告。多帧汇总后，每条都会给出出现了几帧、首末时间。
 
-预期中的问题写在那个元素上：`place({ …, attrs: { expect: 'overflow-canvas: 入场前停在画外' } })`。命中的问题降为 info；写了却没出现，报 `unused-expect`，所以 expect 要和实际情况一起开关（例如只在重叠的那几帧写）。整类忽略用合成上的 `lint: { ignore: [...] }`，只用于 `min-font-size` 这类阈值不适合视频的规则。
+预期中的问题写在那个元素上：`place({ …, attrs: { expect: 'overflow-canvas: 入场前停在画外' } })`。命中的问题降为 info；写了却没出现，报 `unused-expect`，所以 expect 要和实际情况一起开关（例如只在重叠的那几帧写）。要判断某一帧该不该写，可以用 `cam.toScreen` 算出元素在屏幕上的位置，见 showreel 的 `card()`。整类忽略用合成上的 `lint: { ignore: [...] }`，现在的示例都不需要。
 
-推镜、震屏让整页出血时，在合成上写 `root: { bleed: 1 }`，不再报 `overflow-canvas`。
+推镜、震屏用 `view` 取景：取景窗裁掉的部分不报 `overflow-canvas`，字号按屏幕上的大小查。`bleed` 已从 flexlayer 删除。
 
 | 问题码 | 级别 | 视频里的处理 |
 | --- | --- | --- |
-| `overflow-canvas` | error | 震屏、推镜、入场前停在画外时出现，属于正常情况，可以忽略。但如果它出现在**静止段落**的文字上，就是真的越界，要修 |
-| `min-font-size` | warn | 阈值按海报计算，横屏 1080p 下是 42.7px，偏严，可以忽略。视频里正文不小于 28px，HUD 和角标不小于 18px |
-| `outside-safe` | warn | 推镜放大时出现，属于正常。静止段落的标题出现这个问题要修 |
+| `overflow-canvas` | error | 推镜、震屏写成取景窗之后，窗外的部分不再报。入场前停在画外、冲击波扩散时出现，在那个元素上写 `expect`。如果出现在**静止段落**的文字上，就是真的越界，要修 |
+| `view-outside` | error | 取景超出了舞台，成片会露底。用 `shot()` 默认的 `cover` 会把 zoom 抬到盖满；自己写 `view` 时检查对准的点和倍数 |
+| `min-font-size` | warn | 拿屏幕上的字号（乘了 `scale` 和 `view` 的倍数）和 `min(宽, 高) / 1080 × 24` 比，1080p 下是 24px。HUD、角标也不小于 24px；缩着入场、收走的那几帧写 `expect` |
+| `outside-safe` | warn | 只比较左右。推近时被取景窗左右边缘裁开的正文也会报，写 `expect`。静止段落的标题出现这个问题要修 |
 | `text-overlap` | warn | 几乎总是 bug：常见原因是一个 layer 里放了两段文字却没有用 flex。交叉淡入淡出时短暂重叠可以接受，在先画的那个元素上写 `expect` |
 | `unused-expect` | warn | 写了 `expect` 但这一帧没出现。把 expect 的开关条件改准 |
 | `ink-inset` | info | 字形比盒子靠里。要让笔画贴齐定位点，写 `anchor-box="ink"` |

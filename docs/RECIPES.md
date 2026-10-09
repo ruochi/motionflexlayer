@@ -87,16 +87,18 @@ fx({ width: W, height: H }, (ctx) => {
 
 ```ts
 const hit = pulse(f.t, tl.times('impact'), 6)
-camera(
-  {
-    width: W, height: H,
-    zoom: 1 + 0.05 * hit,
-    shakeX: wiggle(f.t, 18, 14 * hit, 1),
-    shakeY: wiggle(f.t, 18, 14 * hit, 2),
-    rotate: wiggle(f.t, 9, 0.6 * hit, 3),
-  },
-  …scene,
-  fx({ width: W, height: H }, (ctx) => glowDot(ctx, 960, 540, 600, '#ffb547', 0.35 * hit)),
+const cam = shot({
+  width: W, height: H,
+  zoom: 1 + 0.05 * hit,
+  shakeX: wiggle(f.t, 18, 14 * hit, 1),
+  shakeY: wiggle(f.t, 18, 14 * hit, 2),
+  rotate: wiggle(f.t, 9, 0.6 * hit, 3),
+})
+h('layer', { width: W, height: H, view: cam.view },
+  h('layer', cam.stage,
+    …scene,
+    fx({ width: W, height: H }, (ctx) => glowDot(ctx, 960, 540, 600, '#ffb547', 0.35 * hit)),
+  ),
 )
 ```
 
@@ -176,39 +178,66 @@ const on = typing || (f.t * 1.8) % 1 < 0.5
 
 ## 镜头
 
-**推镜到任意点。** `camera` 让世界坐标 `(x, y)` 落在画面中心，并绕它缩放。它只是一层 layer：先平移，再以 `(x, y)` 为 `origin` 缩放、旋转：
+镜头是两层 layer：外层是取景窗，`width`、`height` 是它在成片上的大小，`view="x y w h"` 是从舞台上取的那一块；里层是舞台，内容照常用舞台坐标摆放。`shot()` 只负责算数，结构自己写：
+
+```ts
+const cam = shot({ width: W, height: H, x: 1160, y: 575, zoom: z })
+h('layer', { width: W, height: H, view: cam.view }, h('layer', cam.stage, …scene))
+```
+
+- 窗外裁掉，不报 `overflow-canvas`；字号按屏幕上的大小查，远景里的小字推近后就不再报 `min-font-size`；
+- `view` 没被舞台盖满时报 `view-outside`。`shot()` 默认把 `zoom` 抬到刚好盖满（震屏、旋转、对准边缘时），`cover: false` 关掉；
+- 章节、字幕、标注写在取景窗外面，用成片像素；
+- 调色、暗角写在取景窗那层上，是镜头的滤镜；写在舞台里，是场景里的光。
+
+**推镜到任意点。** `(x, y)` 是舞台上要对准的点，落在取景窗中心：
 
 ```ts
 const z = Math.exp(Math.log(16) * progress(f.t, 30.5, 32, 'inOutCubic'))   // 按指数缩放，速度感才均匀
-camera({ width: W, height: H, x: 1160, y: 575, zoom: z }, …scene)
+const cam = shot({ width: W, height: H, x: 1160, y: 575, zoom: z })
 ```
 
 如果要让目标点在缩放的同时从原位滑到画面中心，令 `x = 目标 + (中心 - 屏幕位置) / zoom`。showreel 的 `layoutScene` 就是这样写的。
 
-**推向排版算出的一点。** 目标点不必手填：先用 `canvas.create` 量一遍整页，在 `text[].lines[].chars` 里找到要看的字，它的格子中心就是 `camera` 的 `x`、`y`。改了正文、换了栏宽，镜头还是对准那几个字。屏幕上的位置是 `(p - 镜头点) × zoom + 画面中心`，要在镜头外画框标出它时用这条式子。见 `examples/ink/page.ts`。
+**推向排版算出的一点。** 目标点不必手填：先用 `canvas.create` 量一遍整页，把要看的字包一层 `<span id="here">`，`text[].lines[].chars` 里带这个 `id` 的字就是它，格子中心就是 `shot` 的 `x`、`y`。改了正文、换了栏宽，镜头还是对准那几个字。要在窗外画框标出它，用 `cam.toScreen(x, y)` 换成成片像素，盒子的宽高乘 `cam.zoom`。见 `examples/ink/page.ts`。
 
 **按对数插值缩放。** 从 15 倍拉到 1 倍再推到 5 倍，`zoom` 直接线性插值时，放大的那一头会一闪而过。对 `log(zoom)` 插值，画面里的运动速度才是匀的：
 
 ```ts
 const logZ = lerp(Math.log(z0), Math.log(z1), progress(f.t, a, b, 'inOutCubic'))
-camera({ width: W, height: H, x, y, zoom: Math.exp(logZ) }, …world)
+const cam = shot({ width: W, height: H, x, y, zoom: Math.exp(logZ) })
 ```
+
+**镜头歪一下。** `rotate` 转的是舞台，绕对准的点转，取景窗本身不转，画面边缘仍是水平的。要歪的是画框（比如画中画的小窗），在取景窗那层上写 `rotate`。
 
 **绕任意点转一组内容。** `place` 的 `origin` 也接受任意点。卡片绕自己的左下角倒下：`place({ x, y, width: 400, height: 300, origin: 'bottom-left', rotate })`；绕卡片外的一点公转：`origin: [200, 900]`。
 
 **常驻的缓慢推进。** 整段 0 → 6% 的推进，让画面一直有呼吸感：
 
 ```ts
-camera({ width: W, height: H, zoom: 1 + 0.06 * progress(f.t, 0, 8, 'inOutSine') }, …)
+const cam = shot({ width: W, height: H, zoom: 1 + 0.06 * progress(f.t, 0, 8, 'inOutSine') })
 ```
 
-**镜头分层。** 外层镜头负责震动，内层镜头负责推拉；HUD 放在两层镜头外面：
+**镜头分层。** 外层取景窗负责震动，舞台里再开一个取景窗负责推拉；HUD 放在两层外面：
 
 ```ts
+const framed = (cam: Shot, ...kids: Child[]) => h('layer', { width: W, height: H, view: cam.view }, h('layer', cam.stage, ...kids))
 return [
-  camera({ width: W, height: H, shakeX, shakeY }, background, camera({ width: W, height: H, x, y, zoom }, cards)),
+  framed(shot({ width: W, height: H, shakeX, shakeY }), background, framed(shot({ width: W, height: H, x, y, zoom }), cards)),
   hud,
   fx({ width: W, height: H, name: 'post' }, grainAndVignette),
+]
+```
+
+**画中画：一个舞台，几个窗口。** 舞台排一次，放进几个取景窗，各取一块。小窗的位置、大小可以做动画，长到全屏就是转场：
+
+```ts
+const stage = canvas.create(h('layer', { width: W, height: H }, …scene))   // 量一次，结果可以放进多个窗口
+const wide = shot({ width: W, height: H })
+const close = shot({ width: 640, height: 360, x: 1400, y: 300, zoom: 3 })
+return [
+  h('layer', { width: W, height: H, view: wide.view }, stage),
+  h('layer', { x: 1200, y: 640, width: 640, height: 360, view: close.view, rotate: -2 }, stage),
 ]
 ```
 
@@ -322,7 +351,7 @@ for (const p of proj) glowDot(ctx, p.x, p.y, 3 * p.s, '#4fd1ff', clamp(p.s - 0.4
 
 ## 质感：颗粒、暗角、光
 
-**最后一层 post。** 放在返回数组的最后，不放进镜头：
+**最后一层 post。** 放在返回数组的最后，不放进取景窗：
 
 ```ts
 const noiseTile = createCanvas(256, 256)   // 模块顶层建一次

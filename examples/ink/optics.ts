@@ -8,7 +8,7 @@
  */
 import { canvas, glyph, h } from 'flexlayer'
 import { fade, keyframes, lerp, place, progress, spring, text, type Child, type Frame } from 'motionflexlayer'
-import { at, C, H, L, LATIN, sheet, W } from './kit.js'
+import { at, C, H, L, LATIN, poseBounds, sheet, W } from './kit.js'
 
 // ---------------------------------------------------------------- 玻璃
 
@@ -69,17 +69,28 @@ function lens(t: number): Child {
   )
 }
 
+const GLASS_TEXT = h('p', { style: 'white-space:nowrap; font-size:470px; font-weight:800; color:#ffffff10; glass:clear; shadow:0 24 48 #00000055' }, '着墨')
+/** 玻璃字的着墨，相对字的中心。阴影在报告的 effect 框里四周各外扩约 50px。 */
+const GLASS_INK = (() => {
+  const made = canvas.create(h('layer', {}, GLASS_TEXT))
+  const ink = made.elements[0]!.ink
+  return { left: ink.left - made.width / 2, top: ink.top - made.height / 2, right: ink.right - made.width / 2, bottom: ink.bottom - made.height / 2 }
+})()
+const GLASS_SHADOW = 50
+
 function glassText(t: number): Child {
   const k = spring(t - T_GLASS_TEXT + 0.15, { damping: 13, stiffness: 70 })
   if (k <= 0) return null
   const float = t - T_GLASS_TEXT
   const y = lerp(1500, H / 2 - 10, k) + 12 * Math.sin(float * 1.6)
-  // 字高约 470，中心低于 H - 235 时字脚出画，同时压着字幕升上来
-  const rising = y > H - 300
-  return place(
-    { x: W / 2, y, rotate: 2.2 * Math.sin(float * 1.1), id: 'glass-text', attrs: rising ? { expect: 'overflow-canvas: 从画面下方升上来; text-overlap: 升上来时经过字幕' } : undefined },
-    h('p', { style: 'white-space:nowrap; font-size:470px; font-weight:800; color:#ffffff10; glass:clear; shadow:0 24 48 #00000055' }, '着墨'),
-  )
+  const rotate = 2.2 * Math.sin(float * 1.1)
+  const ink = poseBounds(GLASS_INK, { x: W / 2, y, rotate })
+  const rules = [
+    ink.bottom > H && 'overflow-canvas: 从画面下方升上来',
+    ink.bottom <= H && ink.bottom + GLASS_SHADOW > H && 'effect-clipped: 升上来时阴影还在画面下沿外',
+    y > H - 300 && 'text-overlap: 升上来时经过字幕',
+  ].filter(Boolean)
+  return place({ x: W / 2, y, rotate, id: 'glass-text', attrs: rules.length ? { expect: rules.join('; ') } : undefined }, GLASS_TEXT)
 }
 
 function glassScene(f: Frame): Child[] {
@@ -135,13 +146,14 @@ function solidScene(f: Frame): Child[] {
   const ball = progress(t, T_BALL, T_BACK + 0.9, 'inOutSine')
   const bx = lerp(1780, -260, ball)
   const bz = -360 + 700 * ball * ball
+  const rolling = t > T_BALL && t < T_BACK + 0.9
   return [
     sheet(
-      { id: 'solid', perspective: 1600, expect: 'overflow-canvas: 地面伸出画面' },
+      { id: 'solid', perspective: 1600, expect: floor > 0.01 || rolling ? 'overflow-canvas: 地面和滚过的小球伸出画面' : undefined },
       floor > 0.01
         ? h('layer', { opacity: floor.toFixed(3), y: (220 * (1 - floor)).toFixed(1) }, h('box', { x: W / 2 - 1100, y: FLOOR.toFixed(1), width: 2200, height: 24, depth: 1200, fill: '#2a2d36' }))
         : null,
-      t > T_BALL && t < T_BACK + 0.9 ? h('sphere', { cx: bx.toFixed(1), cy: (FLOOR - 80).toFixed(1), r: 80, z: bz.toFixed(1), fill: C.gold }) : null,
+      rolling ? h('sphere', { cx: bx.toFixed(1), cy: (FLOOR - 80).toFixed(1), r: 80, z: bz.toFixed(1), fill: C.gold }) : null,
       h(
         'layer',
         {

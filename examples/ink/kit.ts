@@ -43,10 +43,7 @@ export type GlyphPose = {
   fill?: string
 }
 
-/**
- * 把一个字形摆到 (x, y)：旋转、缩放都绕字身中心。
- * 每个字一层 layer 而不是 g：外层的 ink-stroke、shadow 合并子树墨迹时只认 layer，g 里的路径会被漏掉（flexlayer 0.2.20）。
- */
+/** 把一个字形摆到 (x, y)：旋转、缩放都绕字身中心。 */
 export function glyphAt(g: Glyph, p: GlyphPose, attrs: Record<string, string | number | undefined> = {}): FvgNode | null {
   const o = p.opacity ?? 1
   if (o <= 0.002 || !g.d) return null
@@ -66,6 +63,34 @@ export function glyphAt(g: Glyph, p: GlyphPose, attrs: Record<string, string | n
     h('path', { d: g.d, fill: p.fill ?? C.paper, stroke: 'none', ...attrs }),
   )
 }
+
+export type Bounds = { left: number; top: number; right: number; bottom: number }
+
+/** 相对中心的局部框，绕中心缩放、旋转后放到 (x, y)，在画布上的外接框。 */
+export function poseBounds(local: Bounds, p: { x: number; y: number; rotate?: number; scale?: number }): Bounds {
+  const s = p.scale ?? 1
+  const r = ((p.rotate ?? 0) * Math.PI) / 180
+  const cos = Math.cos(r)
+  const sin = Math.sin(r)
+  const xs: number[] = []
+  const ys: number[] = []
+  for (const [u, v] of [[local.left, local.top], [local.right, local.top], [local.right, local.bottom], [local.left, local.bottom]] as const) {
+    xs.push(p.x + s * (cos * u - sin * v))
+    ys.push(p.y + s * (sin * u + cos * v))
+  }
+  return { left: Math.min(...xs), top: Math.min(...ys), right: Math.max(...xs), bottom: Math.max(...ys) }
+}
+
+/** glyphAt 摆好的字形，着墨在画布上的外接框。 */
+export function glyphInk(g: Glyph, p: GlyphPose): Bounds {
+  const ink = g.ink ?? { x: 0, y: 0, width: g.width, height: g.height }
+  const left = ink.x - g.width / 2
+  const top = ink.y - g.height / 2
+  return poseBounds({ left, top, right: left + ink.width, bottom: top + ink.height }, p)
+}
+
+/** 离画布四边最近的距离。描边、阴影外扩超过它就会被画布切掉。 */
+export const roomTo = (b: Bounds) => Math.min(b.left, b.top, W - b.right, H - b.bottom)
 
 /** 字身中心在 p、半径约 r 的字有没有伸出画布。用来决定这一帧要不要写 overflow-canvas 的 expect。 */
 export const offCanvas = (p: { x: number; y: number; scale?: number }, r = 36) => {
@@ -132,7 +157,7 @@ const CHAPTERS: Partial<Record<Id, Chapter>> = {
   stroke: { api: 'ink-stroke', note: 'CSS 描边压在笔画中线上，几个字也合不成一圈' },
   glass: { api: 'glass', note: 'backdrop-filter 只会模糊，折射要自己写着色器' },
   solid: { api: 'extrude · perspective', note: '网页要 three.js，还要把中文字体转成几何体' },
-  camera: { api: 'origin="x y" · canvas.create()', note: '网页要先渲染一遍，量出目标的位置再推镜' },
+  camera: { api: 'view · canvas.create()', note: '网页要先渲染一遍，量出目标的位置再推镜' },
   report: { api: 'checkFvg() · anchor-box="ink"', note: '浏览器只给盒子；字形的边界要逐字去量' },
 }
 
@@ -216,7 +241,15 @@ export function seal(x: number, y: number, k: number, rotate: number, away = 0):
   if (k <= 0.002 || away >= 0.999) return null
   const s = (1 + 0.9 * (1 - Math.min(1, k))) * (1 - away)
   return place(
-    { x, y, scale: Math.max(0.001, s), rotate: rotate + 50 * away, opacity: Math.min(1, k * 3) * (1 - away * away), id: 'seal' },
+    {
+      x,
+      y,
+      scale: Math.max(0.001, s),
+      rotate: rotate + 50 * away,
+      opacity: Math.min(1, k * 3) * (1 - away * away),
+      id: 'seal',
+      attrs: s < 0.5 ? { expect: 'min-font-size: 转着收走时缩小' } : undefined,
+    },
     h(
       'div',
       { style: `width:132px; height:132px; border-radius:16px; background:${C.red}; display:flex; align-items:center; justify-content:center` },

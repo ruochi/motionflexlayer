@@ -4,16 +4,16 @@
 
 motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做法。改完一项，motionflexlayer 删一段绕路代码。
 
-**状态核对于 flexlayer 0.2.20（4c6432a）。** 第 1、5、8 项已完成，motionflexlayer 已删掉对应的绕路代码；第 4 项部分完成。另外 flexlayer 新增的 `expect`、`data`、行内元素进报告、`flex-wrap`、`anchor-box="ink"`、`glyph()`、`canvas.create()` 的逐字位置、`ink-stroke`、`glass`、`extrude` 都已在示例里用上（`examples/ink`）。第 15–17 项是做 ink 示例时发现的。
+**状态核对于 flexlayer 0.2.30（db6ef3b）。** 第 1、4、5、8、15、16 项已完成，motionflexlayer 已删掉对应的绕路代码；第 17 项部分完成。第 4 项没有按下面的 `bleed` / `profile` 方案做，而是换成了更好的 `view` 取景：取景窗裁掉的不报 `overflow-canvas`，最小字号按屏幕上的大小和短边算。另外 flexlayer 新增的 `expect`、`data`、行内元素进报告、`flex-wrap`、`anchor-box="ink"`、`glyph()`、`canvas.create()` 的逐字位置和 `elements`、`ink-stroke`、`glass`、`extrude` 都已在示例里用上（`examples/ink`）。
 
 | # | 优先级 | 改动 | 状态 | motionflexlayer 里受影响的代码 |
 | --- | --- | --- | --- | --- |
 | 1 | P0 | 打包：`prepare` + `files` | ✅ 已完成 | 依赖已改成 `github:ruochi/flexlayer#<commit>` |
 | 2 | P0 | 导出字体与 canvas | 未做 | `src/canvas.ts` 整个文件 |
 | 3 | P0 | `draw` 的 ctx 类型补全 | 未做 | `src/render/stills.ts` 里 `drawImage` 的强转 |
-| 4 | P1 | 动画用的检查配置：`bleed`、视频字号阈值 | 部分：根上 `bleed`、元素上 `expect` 已有；嵌套 layer 的 `bleed`、视频字号阈值没有 | 示例里的 `lint.ignore: ['min-font-size']` |
-| 5 | P1 | `origin` 支持任意点 | ✅ 已完成（0.2.19） | `camera()` 已改成一层 layer |
-| 6 | P1 | 离屏画布按可见区域裁剪 | 未核实 | `MOTION.md` 里“镜头里别放 blur / mask”这条规则 |
+| 4 | P1 | 动画用的检查配置 | ✅ 已完成：`view` 取景 + 屏幕字号（0.2.22、0.2.30） | 示例里的 `lint.ignore` 已全部删掉；`camera()` 换成 `shot()` |
+| 5 | P1 | `origin` 支持任意点 | ✅ 已完成（0.2.19） | `place()` 的 `origin` 接受 `[x, y]` |
+| 6 | P1 | 离屏画布按可见区域裁剪 | 未做（0.2.30 实测） | `MOTION.md` 里“镜头里别放 blur / mask”这条规则 |
 | 7 | P1 | 行内 `span` 的变换与透明度 | 未做（文字整段可以 `style="scale:…"`） | `src/drawkit.ts` 的 `drawGlyphs` |
 | 8 | P0 | 原始像素输出 | ✅ 已完成：`renderFrames({ format: 'rgba' })` | `src/render/raw.ts` 已删除 |
 | 9 | P1 | 成组透明度 | 未做 | 无（现在没有绕路，只能接受瑕疵） |
@@ -22,9 +22,10 @@ motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做
 | 12 | P2 | 层效果：`bloom`、`chroma` | 未做 | 示例里在 draw 里手画的光晕 |
 | 13 | P1 | 单帧取原始像素、异步帧函数 | 新增 | `src/render/frame.ts` 的 `renderRgba` |
 | 14 | P2 | `renderFrames` 的 `t` 由调用方给 | 新增 | 无 |
-| 15 | P0 | 中文折行：句读落到行首 | 新增（缺陷） | `examples/ink/type.ts` 的 `headsOk`，以及换宽度时跳过坏宽度 |
-| 16 | P1 | 合并子树墨迹时进 `g` | 新增（缺陷） | `examples/ink/kit.ts` 的 `glyphAt` 每字一层 layer |
-| 17 | P2 | `canvas.create` 的字带上原文位置；竖排按列给 | 新增 | `examples/ink/page.ts` 的 `cells()`、`type.ts` 按 `x` 分列 |
+| 15 | P0 | 中文折行：句读落到行首 | ✅ 已完成 | `headsOk` 已删除 |
+| 16 | P1 | 合并子树墨迹时进 `g` | ✅ 已完成 | 无（`glyphAt` 每字一层 layer 只为绕字身中心转） |
+| 17 | P2 | `canvas.create` 的字带上原文位置；竖排按列给 | 部分：字带上所在 span 的 `id` | `examples/ink/page.ts` 的 `cells()` 已改成按 id 取；`type.ts` 竖排仍按 `x` 分列 |
+| 18 | P2 | 被取景窗裁开的文字和 `outside-safe` | 新增 | `examples/ink/page.ts`、`showreel` 卡片上的 `expect` |
 
 ---
 
@@ -77,48 +78,28 @@ export type DrawContext = Parameters<DrawFn>[0]
 
 **验收。** 在 `draw` 里写 `ctx.drawImage(offscreen, 0, 0)` 不需要强转也能通过 `tsc`。
 
-## 4. 动画用的检查配置（P1）
+## 4. 动画用的检查配置（P1，✅ 已完成）
 
-**问题。** 现有检查是为单张海报设计的，放到视频里会出两类误报：
+原来的问题：海报用的检查放到视频里，震屏、推镜时每帧都报 `overflow-canvas`，最小字号阈值是 `宽 / 1080 × 24`（横屏 1080p 下 42.7px），示例只能整类忽略。
 
-| 问题码 | 视频里的情况 | 现状 |
-| --- | --- | --- |
-| `overflow-canvas`（error） | 震屏、推镜、入场前停在画外、冲击波扩散，都会越出画布。这是设计的一部分 | 每帧都报 error，真正的越界淹没在里面 |
-| `min-font-size`（warn） | 阈值是 `width / 1080 × 24`。横屏 1920 宽时阈值是 42.7px，HUD 用的 20–24px、字幕用的 32px 全部被报 | 只能整体忽略这条规则，真正太小的字也就查不出来了 |
-| `outside-safe`（warn） | 推镜时，文字被放大越过安全区 | 同上 |
+flexlayer 没有按这里原先提的 `bleed` / `profile: 'video'` 做，而是加了 `view` 取景（0.2.22），后来又按短边算字号（0.2.30）：
 
-**建议。**
+- `<layer width height view="x y w h">` 取舞台的一块铺满取景窗，窗外裁掉，不报 `overflow-canvas`；
+- `view` 没被直接子元素（转完、缩完的四边形）盖住时报 `view-outside`（error），露底能查出来；
+- 最小字号拿屏幕上的字号（`font-size × screenScale`）和 `min(宽, 高) / 1080 × 24` 比，1080p 横屏、竖屏都是 24px；
+- 阴影、光晕的外扩也按屏幕算；`bleed` 已删除。
 
-(a) `layer` 增加属性 `bleed`。子树允许越出画布，越出时不报 `overflow-canvas` 和 `outside-safe`，但 `effect-clipped` 照报。
-
-```html
-<layer bleed x="960" y="540" anchor="center" width="3840" height="2160" scale="2.4">…</layer>
-```
-
-motionflexlayer 的 `camera()` 会自动加上 `bleed`。
-
-(b) 渲染选项增加 `profile`：
-
-```ts
-renderFvg(node, { t, profile: 'video' })
-```
-
-`profile: 'video'` 的规则：
-
-- `min-font-size` 的阈值改按短边算：`min(width, height) / 1080 × 18`。1080p 下是 18px，4K 下是 36px；
-- `overflow-canvas` 降为 warn，但只在元素的着墨**完全**在画布外时报。完全在画外的元素应该直接不渲染，这是性能问题而不是布局问题。
-
-**motionflexlayer 改完后。** 示例里去掉 `lint: { ignore: ['overflow-canvas', 'min-font-size'] }`；`renderFrame` 默认传 `profile: 'video'`。
-
-**验收。** hello、showreel 两个示例在 `profile: 'video'` 下逐帧检查，不出 error；故意放一行 12px 的字，仍然会报 `min-font-size`。
+**motionflexlayer 改完了。** `camera()` 换成纯函数 `shot()`，算出 `view`、舞台层属性和 `toScreen`，结构由用户写两层 layer。hello、hello-react、showreel、ink 都去掉了 `lint.ignore`，逐帧检查没有 warn 以上的问题。
 
 ## 5. `origin` 支持任意点（P1，✅ 已完成）
 
 flexlayer 0.2.19 起 `origin` 可以写任意一点：`"640 420"`、`"33% 39%"`、`"top 80"`，百分比按布局盒子算，支点可以在盒子外面。九宫格写法不变，`anchor` 仍只有九宫格。
 
-motionflexlayer 的 `camera()` 从两层包裹改成一层：把 `(x, y)` 平移到画面中心，再以它为 `origin` 缩放、旋转。`place()` 的 `origin` 也接受 `'120 80'` 或 `[x, y]`。`test/nodes.spec.ts` 里验证了镜头只有一层、`origin` 写的是目标点。
+motionflexlayer 的 `place()` 的 `origin` 接受 `'120 80'` 或 `[x, y]`。`shot()` 的旋转也靠它：舞台层以对准的点为 `origin` 转。
 
 ## 6. 离屏画布按可见区域裁剪（P1）
+
+**0.2.30 实测仍然存在，`view` 也一样。** 舞台里放一段带 `blur` 的字和一段带 `grade` 的字，整帧渲染：1× 约 90ms，4× 约 140ms，16× 约 470ms；用 `scale` 推近和用 `view` 推近几乎相同。
 
 **问题。** `blur`、`filter`、`grade`、`mask`、`glass` 会按“元素尺寸 × 当前变换的缩放”开离屏画布（见 `paint.ts` 的 `paintWithLayerFilter`：`createCanvas(tw * k, th * k)`）。推镜放大 16 倍时，一张 400×300 的卡片如果带 `mask`，离屏就是 6400×4800，还可能爆内存。实测单帧 `renderFvg`（包含 PNG 编码，画面大部分是黑色，编码较快）：缩放 1× 时 48ms，4× 时 57ms，16× 时 235ms。也就是说，放大 16 倍时多出约 190ms，全花在一张看不全的离屏上。可这张卡片在画面里能看到的部分，最多也就是 1920×1080。
 
@@ -224,51 +205,38 @@ const frames = renderFrames({ …, durationInFrames: frame + 1, component: () =>
 
 `renderFrames` 用 `frame / fps` 算 `t`。motionflexlayer 的草稿模式会改 fps（60 改成 30），时间仍然对，但如果以后要做子帧（运动模糊），需要在同一帧号下传不同的 `t`。建议 `RenderFramesOptions` 加 `times?: number[]`，或者第 13 项的单帧接口接受任意 `t`。
 
-## 15. 中文折行：句读落到行首（P0，新增，缺陷）
+## 15. 中文折行：句读落到行首（P0，✅ 已完成）
 
-**问题。** `src/text.ts` 里 `glueUnits` 把不能出现在行首的标点（，。、；：？！）和前一个字粘在一起，但它是在 `wrapParagraph` 折完行之后、只在一行之内做的。折行时这些标点仍是独立的单位，所以可以被折到下一行的行首。
+flexlayer 改用 `linebreak` 断行，并避开行首标点。ink 示例那段文字在横排宽 700–1260 逐个整数宽度扫过一遍，行首都不是 ，。、；：？！。`examples/ink/type.ts` 的 `headsOk` 和跳过坏宽度的重试已删除。
 
-用 Kai 700、64px 排 `先排版，再拆字。每个字都知道自己落在哪一行、哪一格。笔画着墨之处，就是它该在的地方。`：
+## 16. 合并子树墨迹时进 `g`（P1，✅ 已完成）
 
-| 写法 | 出问题的尺寸 | 行首的标点 |
-| --- | --- | --- |
-| 横排，`line-height:1.6` | 宽 1500 | 。 |
-| 横排，另一段文字 | 宽 700、760 | ； 、 |
-| 竖排，`letter-spacing:0` | 高 400–460、540–680 | 。 、 ， |
+`layer` 的 `ink-stroke`、`shadow` 合并子树墨迹时会走进 `g`。`glyphAt` 仍然每个字一层 `layer`，因为这样旋转、缩放可以直接绕字身中心，不再是为了绕开这个缺陷。
 
-横排宽 780–1200 没问题。
+## 17. `canvas.create` 的字带上原文位置；竖排按列给（P2，部分完成）
 
-**motionflexlayer 现在的做法。** ink 示例排完版先查一遍行首（`headsOk`），拖动栏宽时遇到坏宽度就换下一个整数宽度。
+**已完成。** 最内层写了 `id` 的行内标签拥有的字，`chars[]` 上带这个 `id`；`canvas.create` 还返回 `elements`，每个元素有布局盒和变换后的外接框。ink 示例把要看的字写成 `<span id="here">这里</span>`，`cells('here')` 直接按 id 取，不再把 `chars[].text` 拼起来 `indexOf`。
 
-**建议。** 把禁则粘连挪到折行之前：可断点的候选里去掉“标点之前”，或者折行时把行首标点连同前一个字一起推到下一行（推出），行尾放不下时允许标点悬挂（挤进）。
+**还没有。**
 
-**验收。** 上面这段文字在横排宽 600–1600、竖排高 400–800 之间逐个整数尺寸扫一遍，行首都不是 ，。、；：？！。
+- `PlacedChar` 没有原文偏移。不想为了定位包 span 的时候，仍然只能按文字找；
+- 竖排时 `lines` 仍是一格一项，同一列靠 `x` 相同来认（`examples/ink/type.ts`）。
 
-## 16. 合并子树墨迹时进 `g`（P1，新增，缺陷）
+**建议。** `PlacedChar` 加 `index`（写清楚是 UTF-16 还是码点）。竖排时每项加 `column`。
 
-**问题。** `layer` 上的 `ink-stroke`（以及 `shadow`、`glow` 的外扩轮廓）先合并整个子树的墨迹再描边。合并用的 `groupInkBounds` 和 `drawInkMask` 只往 `layer`、`flex` 里走，遇到 `g`（`kind: 'group'`）就当成叶子，而 `drawNodeInk` 对 group 什么也不画。结果是 `g` 里的路径不进描边：
-
-```ts
-h('layer', { 'ink-stroke': '12 #fff, 28 #e0432b' }, h('path', { d }))                               // 有描边
-h('layer', { 'ink-stroke': '12 #fff, 28 #e0432b' }, h('g', { transform: 'translate(800,300)' }, h('path', { d })))  // 没有描边
-```
-
-**motionflexlayer 现在的做法。** `glyphAt` 给每个字形包一层 `layer`（`x`、`y`、`rotate`、`scale`），不用 `g`。
-
-**建议。** `groupInkBounds`、`drawInkMask` 遇到 group 时按它的 `transform` 递归进子元素，和 layer 一样处理。
-
-**验收。** 上面第二种写法和第一种渲染出同样的描边（位置差 `translate` 的距离）。
-
-## 17. `canvas.create` 的字带上原文位置；竖排按列给（P2，新增）
+## 18. 被取景窗裁开的文字和 `outside-safe`（P2，新增）
 
 **问题。**
 
-- `text[].lines[].chars` 里没有折行处被吃掉的空格，所以“原文第 n 个字”和“chars 里第 n 个”对不上。要找某几个字的格子，只能把 `chars[].text` 拼起来再 `indexOf`。
-- 竖排时 `lines` 是一格一项（每项一个字），同一列只能靠 `x` 相同来认。
+- 推近一整页正文时，被取景窗左右边缘裁开的段落每帧都报 `outside-safe`。`overflow-canvas` 对取景窗裁掉的部分已经不报，`outside-safe` 却照报，两条规则口径不一致；
+- `outside-safe` 只比较左右，不比较上下；SPEC 的问题码表里没写这一点，示例里按屏幕位置写 `expect` 时踩过。
 
-**建议。** `PlacedChar` 加 `index`：这个字在节点原文里的偏移（UTF-16 或码点，写清楚是哪一种）。竖排时 `lines` 改成一列一项，或者每项加 `column`。
+**motionflexlayer 现在的做法。** ink 的页面、showreel 的卡片上按帧写 `expect: 'outside-safe: …'`；showreel 用 `shot().toScreen` 算卡片文字在屏幕上的位置，只在真越界的帧写。
 
-**验收。** 对含空格、会折行的英文混排段落，`chars[k].index` 指回原文里同一个字。
+**建议。** 二选一并写进 SPEC：
+
+- 被 `view` 窗口边缘裁开的文字不报 `outside-safe`（和 `overflow-canvas` 一致），只看仍在窗内的部分；
+- 或者保持现状，但在 SPEC 里写明“推近时被取景窗裁开的文字会报，按帧写 `expect`”，以及“只比较左右”。
 
 ---
 
@@ -277,7 +245,7 @@ h('layer', { 'ink-stroke': '12 #fff, 28 #e0432b' }, h('g', { transform: 'transla
 下面这些放在 motionflexlayer 里做，flexlayer 不用管：
 
 - 时间轴、节拍、cue、段落；
-- 镜头、震屏、滚动、擦除、打字机这些原语；
+- 镜头参数（`shot()`：对准、推近、旋转、震屏、盖满）、滚动、擦除、打字机这些原语；
 - 多进程渲染、ffmpeg；
 - 旁白合成与排期；
 - 音频混音（由 visualtone 负责）；

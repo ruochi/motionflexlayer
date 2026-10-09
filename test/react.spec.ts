@@ -3,7 +3,7 @@ import { createElement as e, createContext, useContext, type ReactElement } from
 import { describe, expect, it } from 'vitest'
 import { frameAt, defineComposition } from '../src/composition.js'
 import { Place, Raw, Sequence, fromReact, renderToFvg, useFrame } from '../src/react/index.js'
-import { text } from '../src/nodes.js'
+import { shot, text } from '../src/nodes.js'
 
 const comp = defineComposition({ id: 'r', width: 100, height: 100, duration: 10, render: () => null })
 
@@ -30,6 +30,13 @@ describe('renderToFvg', () => {
     const Label = () => e('p', { color: useContext(Theme) })
     const [n] = renderToFvg(e(Theme.Provider, { value: 'blue' }, e(Label))) as FvgNode[]
     expect(n!.attrs.color).toBe('blue')
+  })
+
+  it('镜头写成两层 layer：view 和舞台属性原样传下去', () => {
+    const cam = shot({ width: 100, height: 100, x: 30, y: 40, zoom: 2, rotate: 5 })
+    const [n] = renderToFvg(e('layer', { width: 100, height: 100, view: cam.view }, e('layer', cam.stage))) as FvgNode[]
+    expect(n!.attrs.view).toBe(cam.view)
+    expect((n!.children[0] as FvgNode).attrs).toMatchObject({ origin: '30 40', rotate: '5' })
   })
 
   it('Raw 插入核心节点', () => {

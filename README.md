@@ -92,7 +92,7 @@ src/
   math.ts ease.ts motion.ts random.ts color.ts   时间、缓动、弹簧、噪声、颜色
   timeline.ts                                   节拍、段落、cue
   composition.ts                                defineComposition、帧、加载
-  nodes.ts drawkit.ts canvas.ts                 动效原语（镜头、滚动、擦除、打字）、draw 工具
+  nodes.ts drawkit.ts canvas.ts                 动效原语（镜头参数 shot、滚动、擦除、打字）、draw 工具
   render/                                       静帧、联系表、多进程视频、问题汇总
   audio/                                        AudioSpec 编译成 visualtone 乐谱、混音、包络、WAV、报告、波形
   voice/                                        TTS（edge-tts）、缓存、旁白时间轴、逐词对齐
@@ -106,5 +106,5 @@ src/
 - 核心写法和 React 写法可用；Vue 计划放在 v2，设计见 [REACT.md](docs/REACT.md#vuev2-计划)。
 - 视频帧走 flexlayer 的 `renderFrames` 原始 RGBA 输出，0.1 的 PNG 跳过垫片已删除。
 - 混音交给 visualtone：响度归一、限幅、人声闪避和分析报告都来自它。设了 `envelopes: true` 的合成，帧函数可以通过 `f.audio` 读到各音轨的电平和起音。
-- 依赖 flexlayer 0.2.20：`origin` 可以写任意一点，`camera()` 已改成一层 layer。还需要 flexlayer 配合的改动见 [FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)，例如离屏画布按可见区域裁剪、`ink-stroke` 合并子树时进 `g`。
+- 依赖 flexlayer 0.2.30：镜头用 `view` 取景，`shot()` 算参数，结构由调用方写两层 layer；字号按屏幕上的大小和短边检查，示例都不再整类忽略问题码。还需要 flexlayer 配合的改动见 [FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)，例如离屏画布按可见区域裁剪、被取景窗裁开的文字怎么报 `outside-safe`。
 - 音频是按响度报告、频段分析和波形检查的，没有人工试听过。
