@@ -65,7 +65,6 @@ export type LayerProps = Positioned &
     /** 只在根上作为画布底色。 */
     background?: string
     color?: string
-    bleed?: Num
     perspective?: Num
     'font-family'?: string
     safe?: Num
@@ -74,6 +73,8 @@ export type LayerProps = Positioned &
     scale?: Num
     origin?: string
     overflow?: 'hidden' | 'visible'
+    /** 舞台上被取的矩形 "x y w h"，这一层变成取景窗。用 shot() 或 zoomView() 算。 */
+    view?: string
     overlay?: string
     grade?: string
     'grade-mask'?: string

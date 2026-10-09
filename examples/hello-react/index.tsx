@@ -44,7 +44,7 @@ function Header() {
   return (
     <Place x={160} y={170 - (1 - e) * 30} anchor="left" opacity={Math.min(1, t / 0.3)}>
       <Box style={{ display: 'flex', flexDirection: 'column', alignItems: 'start', gap: 12 }}>
-        <Text style={{ fontSize: 22, color: ACCENT, letterSpacing: 8 }}>MONTHLY RENDERS</Text>
+        <Text style={{ fontSize: 24, color: ACCENT, letterSpacing: 8 }}>MONTHLY RENDERS</Text>
         <Reveal progress={progress(t, 0.15, 0.9, 'outCubic')} width={1100} height={96}>
           <Place x={0} y={48} anchor="left">
             <Text as="h1" style={{ fontSize: 76, fontWeight: 800, color: INK }}>
@@ -122,7 +122,7 @@ function Total({ values }: { values: number[] }) {
   return (
     <Place x={W - 160} y={170} anchor="right" scale={1 + (done > 0 ? 0.08 * Math.sin(Math.min(1, done) * Math.PI) : 0)}>
       <Box style={{ display: 'flex', flexDirection: 'column', alignItems: 'end', gap: 6 }}>
-        <Text style={{ fontSize: 22, color: MUTED, letterSpacing: 6 }}>TOTAL FRAMES</Text>
+        <Text style={{ fontSize: 24, color: MUTED, letterSpacing: 6 }}>TOTAL FRAMES</Text>
         <Text style={{ fontSize: 72, fontWeight: 800, color: done > 0 ? WARM : INK }}>{value.toLocaleString('en-US')}</Text>
       </Box>
     </Place>
@@ -181,7 +181,6 @@ export default defineComposition({
   background: BG,
   color: INK,
   timeline: tl,
-  lint: { ignore: ['min-font-size'] },
   render: fromReact(<Scene />),
   audio: ({ tl }) => ({
     clips: [

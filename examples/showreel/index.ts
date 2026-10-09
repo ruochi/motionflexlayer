@@ -10,7 +10,6 @@
  * - audio.ts     配乐：示例合成器按 cue 合成
  */
 import {
-  camera,
   clamp,
   defineComposition,
   ease,
@@ -23,6 +22,7 @@ import {
   progress,
   reveal,
   roll,
+  shot,
   spring,
   springSteps,
   text,
@@ -30,6 +30,7 @@ import {
   box,
   type Child,
   type Frame,
+  type Shot,
   type Token,
   type Vec2,
 } from 'motionflexlayer'
@@ -82,6 +83,9 @@ import {
 
 const SIZE = { width: W, height: H }
 
+/** 取景窗 + 舞台两层。窗口铺满画面。 */
+const framed = (cam: Shot, ...children: Child[]) => h('layer', { ...SIZE, view: cam.view }, h('layer', cam.stage, ...children))
+
 /** 全画布绘图层。draws.ts 里的函数签名是 (ctx, t)。 */
 const layerFx = (name: string, draw: (ctx: Parameters<Parameters<typeof fx>[1]>[0], t: number) => void) =>
   fx({ ...SIZE, name }, (ctx, el) => draw(ctx, el.t))
@@ -112,9 +116,9 @@ function geometryLabels(t: number): Child[] {
       { x: 200 - slide, y: 540, anchor: 'left', opacity: a },
       box(
         { display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'start' },
-        label('SIDES · 边数', { fontSize: 22, color: MUTED, letterSpacing: 6 }),
+        label('SIDES · 边数', { fontSize: 24, color: MUTED, letterSpacing: 6 }),
         counter,
-        label('spring(damping 11, stiffness 150)', { fontSize: 22, color: AMBER, letterSpacing: 1 }),
+        label('spring(damping 11, stiffness 150)', { fontSize: 24, color: AMBER, letterSpacing: 1 }),
       ),
     ),
     place(
@@ -122,7 +126,7 @@ function geometryLabels(t: number): Child[] {
       box(
         { display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'end' },
         label('r(θ) = R cos(π/n) / cos(θ - π/n)', { fontSize: 26, color: INK }),
-        label('n = ∞ → 3 → 4 → 6', { fontSize: 22, color: MUTED, letterSpacing: 2 }),
+        label('n = ∞ → 3 → 4 → 6', { fontSize: 24, color: MUTED, letterSpacing: 2 }),
         label('四层轮廓，各晚 70ms 跟随', { fontSize: 24, color: MUTED }),
       ),
     ),
@@ -158,21 +162,47 @@ const ORBIT_AT: Vec2 = [960 + 0.5 * (CARD_W + CARD_GAP), CARD_Y - CARD_H / 2 + 2
 /** 卡片落地后的余震：衰减正弦。 */
 const wave = (x: number) => (x <= 0 ? 0 : -Math.exp(-x * 5.5) * Math.sin(x * 11) * 70)
 
-function card(i: number, t: number) {
+const expectOf = (rules: Array<string | false>) => {
+  const on = rules.filter(Boolean)
+  return on.length ? { expect: on.join('; ') } : undefined
+}
+
+const SAFE = 0.04 * H
+/** 左下角段落名所在的成片像素范围。 */
+const HUD_ROLL = { left: 100, right: 460, top: H - 64 - 17, bottom: H - 64 + 17 }
+
+/** 卡片下半部文字区在屏幕上的外接框：标题到代码行，左右收进 padding。flexlayer 的 outside-safe 只看左右。 */
+function cardTextOnScreen(cx: number, cy: number, cam: Shot) {
+  const [x0, y0] = cam.toScreen(cx - CARD_W / 2 + 24, cy - CARD_H / 2 + 312)
+  const [x1, y1] = cam.toScreen(cx + CARD_W / 2 - 24, cy - CARD_H / 2 + 405)
+  return { left: x0, top: y0, right: x1, bottom: y1 }
+}
+
+function card(i: number, t: number, cam: Shot) {
   const T = CARD_TIMES[i]!
   if (t < T) return null
   const e = spring(t - T, { damping: 12, stiffness: 140 })
   const away = i === 2 ? 0 : progress(t, ZOOM_FROM, ZOOM_FROM + 0.8, ease.smoothstep)
   const c = CARDS[i]!
+  const x = 960 + (i - 1.5) * (CARD_W + CARD_GAP)
+  const y = CARD_Y + (1 - e) * 360 + wave(t - CARD_WAVE[i]!)
+  const txt = cardTextOnScreen(x, y, cam)
+  const onCanvas = txt.right > 0 && txt.left < W && txt.bottom > 0 && txt.top < H
+  const outside = onCanvas && (txt.left < SAFE || txt.right > W - SAFE)
+  const overHud = e < 0.95 && txt.left < HUD_ROLL.right && txt.top < HUD_ROLL.bottom && txt.bottom > HUD_ROLL.top
   return place(
     {
-      x: 960 + (i - 1.5) * (CARD_W + CARD_GAP),
-      y: CARD_Y + (1 - e) * 360 + wave(t - CARD_WAVE[i]!),
+      x,
+      y,
       width: CARD_W,
       height: CARD_H,
       rotate: (1 - e) * TILT[i]!,
       origin: 'bottom',
       opacity: clamp((t - T) / 0.12) * (1 - away),
+      attrs: expectOf([
+        outside && 'outside-safe: 落进来和推镜时卡片文字经过画面边缘',
+        overHud && 'text-overlap: 落进来时从左下角的段落名上经过',
+      ]),
     },
     box(
       {
@@ -191,10 +221,10 @@ function card(i: number, t: number) {
       h('viz', { width: 310, height: 270, draw: drawViz(i) }),
       box(
         { display: 'flex', gap: 14, alignItems: 'center' },
-        label(`0${i + 1}`, { fontSize: 22, color: c.color, letterSpacing: 2 }),
+        label(`0${i + 1}`, { fontSize: 24, color: c.color, letterSpacing: 2 }),
         label(c.title, { fontSize: 38, fontWeight: 700, color: INK }),
       ),
-      label(c.code, { fontSize: 21, color: MUTED }),
+      label(c.code, { fontSize: 24, color: MUTED }),
     ),
   )
 }
@@ -207,12 +237,13 @@ function layoutScene(t: number) {
   const screen: Vec2 = [lerp(ORBIT_AT[0], W / 2, travel), lerp(ORBIT_AT[1], H / 2, travel)]
   const headOut = 1 - progress(t, ZOOM_FROM, ZOOM_FROM + 0.6, ease.smoothstep)
   const subIn = progress(t, 27.5, 28.1, ease.smoothstep) * headOut
-  return camera(
-    // 镜头对准的世界坐标 = 让 ORBIT_AT 落在 screen 处的那个点
-    { ...SIZE, zoom, x: ORBIT_AT[0] + (W / 2 - screen[0]) / zoom, y: ORBIT_AT[1] + (H / 2 - screen[1]) / zoom },
+  // 镜头对准的舞台坐标 = 让 ORBIT_AT 落在 screen 处的那个点
+  const cam = shot({ ...SIZE, zoom, x: ORBIT_AT[0] + (W / 2 - screen[0]) / zoom, y: ORBIT_AT[1] + (H / 2 - screen[1]) / zoom })
+  return framed(
+    cam,
     h('headline', { x: 960, y: 205, anchor: 'center', width: 1500, height: 140, opacity: headOut.toFixed(3), draw: (ctx, el) => drawHeadline(ctx, el, el.t) }),
     place({ x: 960, y: 322 + (1 - subIn) * 14, opacity: subIn }, label('布局交给 flex，像素交给 draw', { fontSize: 32, color: MUTED, letterSpacing: 6 })),
-    ...[0, 1, 3, 2].map((i) => card(i, t)),
+    ...[0, 1, 3, 2].map((i) => card(i, t, cam)),
   )
 }
 
@@ -231,7 +262,7 @@ function spaceLabel(t: number) {
         { value: springSteps(t, SPACE_MORPHS.slice(1), { damping: 12, stiffness: 160 }), cell: 40, size: 520, align: 'center' },
         SPACE_LABELS.map((s) => label(s, { fontSize: 26, color: INK, letterSpacing: 8 })),
       ),
-      label('1800 个点 · 透视投影 · 全部画在 2D canvas 上', { fontSize: 20, color: MUTED, letterSpacing: 4 }),
+      label('1800 个点 · 透视投影 · 全部画在 2D canvas 上', { fontSize: 24, color: MUTED, letterSpacing: 4 }),
     ),
   )
 }
@@ -295,9 +326,9 @@ function hud(f: Frame) {
     SECTIONS.map((s) =>
       box(
         { display: 'flex', gap: 14, alignItems: 'center' },
-        label(s.index, { fontSize: 22, color: AMBER, letterSpacing: 2 }),
-        label(s.name, { fontSize: 22, color: INK }),
-        label(s.en, { fontSize: 18, color: MUTED, letterSpacing: 4 }),
+        label(s.index, { fontSize: 24, color: AMBER, letterSpacing: 2 }),
+        label(s.name, { fontSize: 24, color: INK }),
+        label(s.en, { fontSize: 24, color: MUTED, letterSpacing: 4 }),
       ),
     ),
   )
@@ -309,12 +340,12 @@ function hud(f: Frame) {
       box(
         { display: 'flex', gap: 14, alignItems: 'center' },
         box({ width: 10, height: 10, borderRadius: 5, background: AMBER }),
-        label('FLEX LAYER', { fontSize: 22, color: INK, letterSpacing: 6 }),
+        label('FLEX LAYER', { fontSize: 24, color: INK, letterSpacing: 6 }),
       ),
     ),
-    place({ x: 1820, y: 90, anchor: 'right' }, label(`DRAW MODE  ·  ${tl.bpm} BPM  ·  ${f.fps} FPS`, { fontSize: 20, color: MUTED, letterSpacing: 3 })),
+    place({ x: 1820, y: 90, anchor: 'right' }, label(`DRAW MODE  ·  ${tl.bpm} BPM  ·  ${f.fps} FPS`, { fontSize: 24, color: MUTED, letterSpacing: 3 })),
     place({ x: 100, y: H - 64, anchor: 'left' }, sectionRoll),
-    place({ x: 1820, y: H - 64, anchor: 'right' }, label(timecode(t), { fontSize: 22, color: INK, letterSpacing: 2 })),
+    place({ x: 1820, y: H - 64, anchor: 'right' }, label(timecode(t), { fontSize: 24, color: INK, letterSpacing: 2 })),
   )
 }
 
@@ -328,16 +359,14 @@ export default defineComposition({
   background: BG,
   color: INK,
   timeline: tl,
-  // 震屏、推镜时元素越出画布是设计的一部分；HUD 的小字在 1080p 视频里是正常字号
-  lint: { ignore: ['overflow-canvas', 'min-font-size'] },
   setup: setupParticles,
   audio,
   render: (f) => {
     const t = f.t
     const cam = shake(t)
     return [
-      camera(
-        { ...SIZE, shakeX: cam.x, shakeY: cam.y, rotate: cam.r },
+      framed(
+        shot({ ...SIZE, shakeX: cam.x, shakeY: cam.y, rotate: cam.r }),
         layerFx('backdrop', (ctx, tt) => {
           drawBackdrop(ctx, tt)
           drawGrid(ctx, tt)

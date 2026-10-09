@@ -15,7 +15,6 @@ import {
 } from './palette.js'
 import {
   box,
-  camera,
   defineComposition,
   drawGlyphs,
   ease,
@@ -23,6 +22,7 @@ import {
   font,
   fx,
   glowDot,
+  h,
   place,
   progress,
   pulse,
@@ -30,6 +30,7 @@ import {
   rgba,
   roll,
   sfx,
+  shot,
   spring,
   springSteps,
   stagger,
@@ -159,7 +160,7 @@ function beatCounter(f: Frame) {
     { x: W - 100, y: 160, anchor: 'right', opacity: a },
     box(
       { display: 'flex', alignItems: 'center', gap: 18 },
-      text('BEAT', { fontSize: 20, color: MUTED, letterSpacing: 6 }),
+      text('BEAT', { fontSize: 24, color: MUTED, letterSpacing: 6 }),
       roll({ value, cell: 80, size: 90, align: 'end' }, cells),
     ),
   )
@@ -187,11 +188,11 @@ function hud(f: Frame) {
   const s = Math.floor(f.t)
   const fr = Math.floor((f.t - s) * f.fps)
   return [
-    place({ x: 100, y: 90, anchor: 'left' }, text(`${f.section?.name.toUpperCase() ?? ''}`, { fontSize: 22, color: MUTED, letterSpacing: 6 })),
+    place({ x: 100, y: 90, anchor: 'left' }, text(`${f.section?.name.toUpperCase() ?? ''}`, { fontSize: 24, color: MUTED, letterSpacing: 6 })),
     place(
       { x: W - 100, y: H - 80, anchor: 'right' },
       text(`00:${String(s).padStart(2, '0')}:${String(fr).padStart(2, '0')}  ·  beat ${Math.max(0, Math.floor(f.beat)) + 1}`, {
-        fontSize: 22,
+        fontSize: 24,
         color: MUTED,
         letterSpacing: 2,
       }),
@@ -208,27 +209,19 @@ export default defineComposition({
   background: BG,
   color: INK,
   timeline: tl,
-  // 镜头和冲击波越过画布边缘是动画里的正常情况；min-font-size 的阈值按海报算，对 1080p 视频偏严
-  lint: { ignore: ['overflow-canvas', 'min-font-size'] },
   render: (f) => {
     const hit = pulse(f.t, [impact], 6)
     const zoom = 1 + progress(f.t, 0, 8, 'inOutSine') * 0.06 + hit * 0.05
+    const cam = shot({
+      width: W,
+      height: H,
+      zoom,
+      shakeX: wiggle(f.t, 18, 14 * hit, 1),
+      shakeY: wiggle(f.t, 18, 14 * hit, 2),
+      rotate: wiggle(f.t, 9, 0.6 * hit, 3),
+    })
     return [
-      camera(
-        {
-          width: W,
-          height: H,
-          zoom,
-          shakeX: wiggle(f.t, 18, 14 * hit, 1),
-          shakeY: wiggle(f.t, 18, 14 * hit, 2),
-          rotate: wiggle(f.t, 9, 0.6 * hit, 3),
-        },
-        backdrop(f),
-        title(f),
-        subtitle(f),
-        codeLine(f),
-        outro(f),
-      ),
+      h('layer', { width: W, height: H, view: cam.view }, h('layer', cam.stage, backdrop(f), title(f), subtitle(f), codeLine(f), outro(f))),
       beatCounter(f),
       ...hud(f),
     ]

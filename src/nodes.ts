@@ -132,48 +132,98 @@ export function fx(opts: FxOptions, draw: DrawFn): FvgNode {
   })
 }
 
-export type CameraOptions = {
-  /** 画布大小。 */
+export type ShotOptions = {
+  /** 取景窗大小，成片像素。 */
   width: number
   height: number
-  /** 镜头对准的世界坐标，落在画面中心。默认画布中心，即不动。缩放、旋转都绕这一点。 */
+  /** 舞台大小。默认和取景窗一样大。 */
+  stage?: readonly [number, number]
+  /** 对准的舞台坐标，落在取景窗中心。默认舞台中心。 */
   x?: number
   y?: number
-  /** 绕镜头中心缩放。 */
+  /** 推近倍数。舞台 1px 在屏幕上是 zoom px。 */
   zoom?: number
-  /** 绕镜头中心旋转，度。 */
+  /** 舞台绕 (x, y) 转，度。取景窗本身不转。 */
   rotate?: number
-  /** 屏幕空间偏移，震屏用。不受 zoom 影响。 */
+  /** 屏幕空间偏移，成片像素，震屏用。不受 zoom 影响。 */
   shakeX?: number
   shakeY?: number
+  /**
+   * 震屏、旋转或对准舞台边缘时，取景会露出舞台外面，flexlayer 报 `view-outside`。
+   * 默认把 zoom 抬到刚好盖满。写 false 保留原倍数。
+   */
+  cover?: boolean
 }
 
+export type Shot = {
+  /** 写在取景窗那层的 `view`。 */
+  view: string
+  /** 舞台那层的属性：宽高，有旋转时带 rotate 和 origin。 */
+  stage: { width: number; height: number; rotate?: number; origin?: string }
+  /** 实际倍数。cover 抬过时比传入的大。 */
+  zoom: number
+  /** 舞台坐标 → 取景窗里的成片像素。取景窗不在 (0, 0) 时再加上它的 x、y。 */
+  toScreen(x: number, y: number): [number, number]
+}
+
+const fmt3 = (n: number) => String(Math.round(n * 1000) / 1000)
+
 /**
- * 镜头：对准任意世界坐标，绕它缩放、旋转，再叠加屏幕空间的震动。
- * 子元素照常用画布坐标摆放。
+ * 镜头取景：对准舞台上任意一点，推近、旋转、震屏，算出 `view` 和舞台层的属性。
+ * 结构由调用方自己写，取景窗多大、放在哪、几个窗口取同一个舞台都可以：
  *
- * 一层 layer：把 (x, y) 平移到画面中心，再以它为 origin 缩放、旋转。
- * 镜头里不要放 blur / mask / grade：它们按缩放后的尺寸开离屏画布，zoom 很大时极慢。
+ * ```ts
+ * const cam = shot({ width: W, height: H, x, y, zoom })
+ * h('layer', { width: W, height: H, view: cam.view }, h('layer', cam.stage, ...scene))
+ * ```
+ *
+ * 章节、字幕、标注写在取景窗外面，用成片像素；要跟住舞台上的一点就用 `toScreen`。
  */
-export function camera(opts: CameraOptions, ...children: Child[]): FvgNode {
+export function shot(opts: ShotOptions): Shot {
   const { width: W, height: H } = opts
-  const x = opts.x ?? W / 2
-  const y = opts.y ?? H / 2
-  const zoom = opts.zoom ?? 1
-  const moved = x !== W / 2 || y !== H / 2
-  return h(
-    'layer',
-    {
-      x: r2(W / 2 - x + (opts.shakeX ?? 0)),
-      y: r2(H / 2 - y + (opts.shakeY ?? 0)),
-      width: W,
-      height: H,
-      origin: moved ? originAttr([x, y]) : undefined,
-      scale: zoom !== 1 ? Math.round(zoom * 10000) / 10000 : undefined,
-      rotate: opts.rotate ? r2(opts.rotate) : undefined,
+  const [SW, SH] = opts.stage ?? [W, H]
+  const x = opts.x ?? SW / 2
+  const y = opts.y ?? SH / 2
+  const rotate = opts.rotate ?? 0
+  const sx = opts.shakeX ?? 0
+  const sy = opts.shakeY ?? 0
+  let zoom = opts.zoom ?? 1
+  const rad = (rotate * Math.PI) / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+
+  if (opts.cover !== false) {
+    // 取景四角 = (x, y) + d / zoom。转回舞台未旋转的坐标里，每个角每个轴都要落在 [0, 舞台] 里，各给 1/zoom 一个上限。
+    let most = Infinity
+    for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
+      const dx = (cx * W) / 2 - sx
+      const dy = (cy * H) / 2 - sy
+      const ux = cos * dx + sin * dy
+      const uy = -sin * dx + cos * dy
+      if (ux > 1e-9) most = Math.min(most, (SW - x) / ux)
+      if (ux < -1e-9) most = Math.min(most, x / -ux)
+      if (uy > 1e-9) most = Math.min(most, (SH - y) / uy)
+      if (uy < -1e-9) most = Math.min(most, y / -uy)
+    }
+    if (most > 0 && Number.isFinite(most)) zoom = Math.max(zoom, 1 / most)
+  }
+
+  const vw = W / zoom
+  const vh = H / zoom
+  const vx = x - sx / zoom - vw / 2
+  const vy = y - sy / zoom - vh / 2
+  return {
+    view: `${fmt3(vx)} ${fmt3(vy)} ${fmt3(vw)} ${fmt3(vh)}`,
+    stage: rotate ? { width: SW, height: SH, rotate: r2(rotate), origin: originAttr([x, y]) } : { width: SW, height: SH },
+    zoom,
+    toScreen(px, py) {
+      const dx = px - x
+      const dy = py - y
+      const qx = x + cos * dx - sin * dy
+      const qy = y + sin * dx + cos * dy
+      return [(qx - vx) * zoom, (qy - vy) * zoom]
     },
-    ...children,
-  )
+  }
 }
 
 export type RollOptions = {
