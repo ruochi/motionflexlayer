@@ -2,14 +2,14 @@
  * 镜头、报告、收尾。
  *
  *   镜头  上一段停在正中的“墨”，其实是这一页里的一个字，只是放大了 15 倍。镜头拉远，整页露出来；
- *         说到“这里”时推向另一处。两处位置都是 canvas.create 量出来的，镜头只用一层 layer 的 origin。
+ *         说到“这里”时推向另一处。两处位置都是 canvas.create 量出来的：字带着所在 span 的 id。
+ *         取景窗用 view 取舞台的一块；调色写在取景窗上，盒子和标签画在窗外，用成片像素。
  *   报告  推到“这里”之后，画出这两个字的盒子（蓝）和着墨（红）。接着三行字左对齐，
  *         报告里的数字说明各自的字形离盒子左边多远；说到“着墨”时按着墨对齐。
  *   收尾  三个名字依次出现，一条时间轴把它们串起来，印章盖在线的末端。
  */
 import { canvas, checkFvg, glyph, h, type FvgReport, type PlacedLine } from 'flexlayer'
 import {
-  camera,
   fade,
   fx,
   lerp,
@@ -17,10 +17,12 @@ import {
   progress,
   reveal,
   rgba,
+  shot,
   spring,
   text,
   type Child,
   type Frame,
+  type Shot,
 } from 'motionflexlayer'
 import { at, C, glyphAt, H, L, LATIN, seal, W } from './kit.js'
 
@@ -29,7 +31,7 @@ import { at, C, glyphAt, H, L, LATIN, seal, W } from './kit.js'
 const COL1_A = 'flexlayer 把一帧画面写成一棵节点树：layer 负责定位，display:flex 负责排布，文字照 HTML 的写法。每次渲染先排版、再绘制，同时交出一份报告，里面有每个元素的盒子和着'
 const COL1_B = '迹，以及越界、重叠、字号太小这些问题。动画就是按时间生成很多帧，每一帧都重新排版。'
 const COL2 = 'motionflexlayer 在这棵树外面加了一条时间轴。旁白先念出来，每段的长短跟着旁白走；visualtone 按同一条时间轴合成音乐，人声一开口，伴奏就让出频段。画面里的动作都卡在旁白的词上，改一句文案，画面和声音一起重新对齐。'
-const COL3_A = '镜头推近时，不需要先把画面渲染成位图。目标点由排版算出：先量出这一页，找到要看的字，再把这一点写成 layer 的 origin，缩放绕着它进行。你现在看的，就是'
+const COL3_A = '镜头推近时，不需要先把画面渲染成位图。目标点由排版算出：先量出这一页，找到要看的字，再让取景窗的 view 对准它，推近只是把 view 取小。你现在看的，就是'
 const COL3_B = '。往后每一帧，仍然有自己的报告。'
 
 const PAGE_W = 1680
@@ -47,9 +49,9 @@ function pageNode(hereColor: string) {
       h(
         'div',
         { style: `display:flex; gap:${(PAGE_W - 3 * COL_W) / 2}px; align-items:flex-start` },
-        h('p', { style: BODY }, COL1_A, h('span', { style: `color:${C.red}; font-weight:700` }, '墨'), COL1_B),
+        h('p', { style: BODY }, COL1_A, h('span', { id: 'mo', style: `color:${C.red}; font-weight:700` }, '墨'), COL1_B),
         h('p', { style: BODY }, COL2),
-        h('p', { style: BODY }, COL3_A, h('span', { style: `color:${hereColor}; font-weight:700` }, '这里'), COL3_B),
+        h('p', { style: BODY }, COL3_A, h('span', { id: 'here', style: `color:${hereColor}; font-weight:700` }, '这里'), COL3_B),
       ),
     ),
   )
@@ -61,30 +63,22 @@ const PY = H / 2 - measured.height / 2 - 20
 
 type Cell = { line: PlacedLine; x: number; width: number }
 
-/** 在第 n 段文字里找 context，返回其中从第 skip 个字起的 count 个格子。折行处的空格不占格，所以按文字找，不按序号数。 */
-function cells(n: number, context: string, skip: number, count: number): Cell[] {
-  const all: Cell[] = []
-  let joined = ''
-  for (const line of measured.text[n]!.lines) {
-    for (const c of line.chars) {
-      all.push({ line, x: c.x, width: c.width })
-      joined += c.text
-    }
-  }
-  const at = joined.indexOf(context)
-  if (at < 0) throw new Error(`第 ${n} 段里没有“${context}”`)
-  return all.slice(at + skip, at + skip + count)
+/** 写了这个 id 的 span 里的字，按出现顺序。 */
+function cells(id: string): Cell[] {
+  const found = measured.text.flatMap((t) => t.lines.flatMap((line) => line.chars.filter((c) => c.id === id).map((c) => ({ line, x: c.x, width: c.width }))))
+  if (found.length === 0) throw new Error(`页面里没有 id 为 ${id} 的字`)
+  return found
 }
 
 const MO_SMALL = (await glyph('墨', { font: 'Kai', size: 34, weight: 700 }))[0]!
 const HERE = await glyph('这里', { font: 'Kai', size: 34, weight: 700 })
 
-const moCell = cells(1, '着墨迹', 1, 1)[0]!
+const moCell = cells('mo')[0]!
 const MO_AT = {
   x: PX + moCell.x + MO_SMALL.width / 2,
   y: PY + moCell.line.baseline - MO_SMALL.baseline + MO_SMALL.height / 2,
 }
-const hereCells = cells(3, '就是这里', 2, 2)
+const hereCells = cells('here')
 /** “这里”两个字的盒子和着墨，页面坐标。 */
 const HERE_BOX = {
   x: PX + hereCells[0]!.x,
@@ -117,7 +111,7 @@ const T_PUSH_END = T_HERE + 0.45
 const T_BOXES = T_PUSH_END + 0.35
 
 /** 镜头：缩放按对数插值，目标点和缩放用同一条缓动，推拉时画面里的运动是匀的。 */
-function shot(t: number) {
+function camAt(t: number) {
   const pull = progress(t, T_PULL, T_PULL_END, 'inOutCubic')
   const push = progress(t, T_PUSH, T_PUSH_END, 'inOutQuart')
   const drift = progress(t, T_PULL_END, T_PUSH, 'inOutSine')
@@ -128,15 +122,14 @@ function shot(t: number) {
   const rotate = 3 * Math.sin(Math.PI * pull) * (1 - push) - 4 * Math.sin(Math.PI * push)
   // 段尾穿进“这里”：最后 0.45 秒再放大 3 倍，同时淡出，报告从稍大的尺寸落回原位接上这股推力
   const through = Math.exp(Math.log(3) * progress(t, L.camera.to - 0.45, L.camera.to, 'inCubic'))
-  return { x, y, zoom: (Math.exp(logZ) + 0.25 * progress(t, T_PUSH_END, L.camera.to + 0.6)) * through, rotate }
+  const zoom = (Math.exp(logZ) + 0.25 * progress(t, T_PUSH_END, L.camera.to + 0.6)) * through
+  return shot({ width: W, height: H, x, y, zoom, rotate })
 }
-
-const toScreen = (s: ReturnType<typeof shot>, p: { x: number; y: number }) => ({ x: (p.x - s.x) * s.zoom + W / 2, y: (p.y - s.y) * s.zoom + H / 2 })
 
 function cameraScene(f: Frame): Child[] {
   const t = f.t
   if (t < L.camera.from - 0.02 || t > L.camera.to) return []
-  const s = shot(t)
+  const cam = camAt(t)
   const pageIn = progress(t, L.camera.from + 0.05, L.camera.from + 0.7, 'inOutSine')
   const glowHere = fade(t, T_HERE - 0.1, L.camera.to + 1, 0.25, 0.3)
   const focus = progress(t, T_PUSH, T_PUSH_END, 'inOutSine')
@@ -150,7 +143,10 @@ function cameraScene(f: Frame): Child[] {
           ctx.fill()
         })
       : null,
-    place({ x: PX, y: PY, anchor: 'top-left', opacity: pageIn, id: 'page', attrs: { expect: 'min-font-size: 远景里的小字，推近后放大; overflow-canvas: 推近时出画; outside-safe: 推近时出画; text-overlap: 推近后正文从标签和字幕底下经过' } }, pageNode(C.gold)),
+    place(
+      { x: PX, y: PY, anchor: 'top-left', opacity: pageIn, id: 'page', attrs: { expect: 'outside-safe: 推近后正文被取景窗裁开; text-overlap: 推近后正文从章节标签和字幕底下经过' } },
+      pageNode(C.gold),
+    ),
     pageIn < 1 ? glyphAt(MO_SMALL, { ...MO_AT, fill: C.red }) : null,
   ]
   return [
@@ -159,25 +155,26 @@ function cameraScene(f: Frame): Child[] {
       {
         width: W,
         height: H,
-        id: 'focus',
+        view: cam.view,
+        id: 'camera',
         opacity: out > 0 ? (1 - out).toFixed(3) : undefined,
         grade: focus > 0.01 ? `mono ${(0.8 * focus).toFixed(2)}, vignette ${(0.55 * focus).toFixed(2)}` : undefined,
         'grade-mask': focus > 0.01 ? 'radial-gradient(#fff0 28%, #fff 72%)' : undefined,
       },
-      camera({ width: W, height: H, x: s.x, y: s.y, zoom: s.zoom, rotate: s.rotate }, ...world),
+      h('layer', cam.stage, ...world),
     ),
-    ...boxes(t, s),
+    ...boxes(t, cam),
   ]
 }
 
 /** 推到“这里”之后：盒子（蓝）和着墨（红）。同一份报告里的两种矩形。 */
-function boxes(t: number, s: ReturnType<typeof shot>): Child[] {
+function boxes(t: number, cam: Shot): Child[] {
   const a = fade(t, T_BOXES, L.camera.to, 0.2, 0.4)
   if (a <= 0) return []
   const draw = progress(t, T_BOXES, T_BOXES + 0.6, 'outCubic')
   const rect = (r: { x: number; y: number; w: number; h: number }) => {
-    const p = toScreen(s, r)
-    return { x: p.x, y: p.y, w: r.w * s.zoom, h: r.h * s.zoom }
+    const [x, y] = cam.toScreen(r.x, r.y)
+    return { x, y, w: r.w * cam.zoom, h: r.h * cam.zoom }
   }
   const b = rect(HERE_BOX)
   const k = rect(HERE_INK)
@@ -245,36 +242,41 @@ function reportScene(f: Frame): Child[] {
     )
   })
   return [
-    place(
-      { x: W / 2, y: H / 2, width: W, height: H, opacity: a, scale: zoomIn, id: 'report', attrs: zoomIn > 1.001 ? { expect: 'overflow-canvas: 从稍大的尺寸落回原位' } : undefined },
-      fx({ width: W, height: H, name: 'report-lines' }, (ctx) => {
-        ctx.strokeStyle = C.red
-        ctx.lineWidth = 2
-        ctx.beginPath()
-        ctx.moveTo(GUIDE, 210)
-        ctx.lineTo(GUIDE, 210 + 660 * lineK)
-        ctx.stroke()
-        if (outline <= 0) return
-        MEASURE.forEach((m, i) => {
-          const dx = xs[i]! - GUIDE
+    h(
+      'layer',
+      { width: W, height: H, view: shot({ width: W, height: H, zoom: zoomIn }).view, opacity: a < 1 ? a.toFixed(3) : undefined, id: 'report' },
+      h(
+        'layer',
+        { width: W, height: H },
+        fx({ width: W, height: H, name: 'report-lines' }, (ctx) => {
+          ctx.strokeStyle = C.red
           ctx.lineWidth = 2
-          ctx.setLineDash([10, 8])
-          ctx.strokeStyle = rgba(C.blue, outline * boxFade)
-          ctx.strokeRect(m.box.left + dx, m.box.top, m.box.width, m.box.height)
-          ctx.setLineDash([])
-          ctx.strokeStyle = rgba(C.red, outline)
-          ctx.strokeRect(m.ink.left + dx, m.ink.top, m.ink.width, m.ink.height)
-        })
-      }),
-      ...SPECIMENS.map((sp, i) => specimen(sp, xs[i]!)),
-      place(
-        { x: 1160, y: 330, anchor: 'top-left' },
-        h(
-          'div',
-          { style: 'display:flex; flex-direction:column; align-items:flex-start; gap:18px' },
-          box3(progress(t, T_TABLE - 0.3, T_TABLE), text('id', { fontFamily: LATIN, fontSize: 44, color: C.dim, width: 90 }), text('box.x', { fontFamily: LATIN, fontSize: 44, color: C.dim, width: 200 }), text('ink.x', { fontFamily: LATIN, fontSize: 44, color: C.dim, width: 200 })),
-          ...rows,
-          box3(progress(t, T_BOXWORD + 0.3, T_BOXWORD + 0.8), text('anchor-box="ink"', { fontFamily: LATIN, fontSize: 46, color: C.red })),
+          ctx.beginPath()
+          ctx.moveTo(GUIDE, 210)
+          ctx.lineTo(GUIDE, 210 + 660 * lineK)
+          ctx.stroke()
+          if (outline <= 0) return
+          MEASURE.forEach((m, i) => {
+            const dx = xs[i]! - GUIDE
+            ctx.lineWidth = 2
+            ctx.setLineDash([10, 8])
+            ctx.strokeStyle = rgba(C.blue, outline * boxFade)
+            ctx.strokeRect(m.box.left + dx, m.box.top, m.box.width, m.box.height)
+            ctx.setLineDash([])
+            ctx.strokeStyle = rgba(C.red, outline)
+            ctx.strokeRect(m.ink.left + dx, m.ink.top, m.ink.width, m.ink.height)
+          })
+        }),
+        ...SPECIMENS.map((sp, i) => specimen(sp, xs[i]!)),
+        place(
+          { x: 1160, y: 330, anchor: 'top-left' },
+          h(
+            'div',
+            { style: 'display:flex; flex-direction:column; align-items:flex-start; gap:18px' },
+            box3(progress(t, T_TABLE - 0.3, T_TABLE), text('id', { fontFamily: LATIN, fontSize: 44, color: C.dim, width: 90 }), text('box.x', { fontFamily: LATIN, fontSize: 44, color: C.dim, width: 200 }), text('ink.x', { fontFamily: LATIN, fontSize: 44, color: C.dim, width: 200 })),
+            ...rows,
+            box3(progress(t, T_BOXWORD + 0.3, T_BOXWORD + 0.8), text('anchor-box="ink"', { fontFamily: LATIN, fontSize: 46, color: C.red })),
+          ),
         ),
       ),
     ),

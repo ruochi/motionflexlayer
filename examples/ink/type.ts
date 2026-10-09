@@ -18,7 +18,8 @@ const SIZE = 64
 const SHAPES = await glyph(P, { font: 'Kai', size: SIZE, weight: 700 })
 const TITLE = await glyph('着墨', { font: 'Brush', size: 360 })
 const TITLE_LEN = TITLE.map((g) => pathLength(g.d))
-const HEAD_FORBIDDEN = '，。、；：？！'
+/** 竖排时要从字身左下挪到格子右上的句读。 */
+const PUNCT = '，。、；：？！'
 
 // ---------------------------------------------------------------- 版面
 
@@ -43,17 +44,12 @@ function typeset(style: string, vertical = false): Layout {
       }
       if (columns.at(-1) !== ch.x) columns.push(ch.x)
       // 句读的字形在字身左下，竖排要挪到格子右上
-      const p = HEAD_FORBIDDEN.includes(ch.text) ? SIZE * 0.5 : 0
+      const p = PUNCT.includes(ch.text) ? SIZE * 0.5 : 0
       slots.push({ x: ch.x + ch.width / 2 + p, y: line.y + line.height / 2 - p, line: columns.length - 1 })
     }
   })
   if (slots.length !== CHARS.length) throw new Error('排版丢了字')
   return { slots, width: made.width, height: made.height, lines }
-}
-
-/** 行首不能是句读。flexlayer 0.2.20 的折行有时会把句读放到行首，换宽度时先查一遍。 */
-function headsOk(l: Layout): boolean {
-  return l.slots.every((s, i) => i === 0 || s.line === l.slots[i - 1]!.line || !HEAD_FORBIDDEN.includes(CHARS[i]!))
 }
 
 const WIDE = 1200
@@ -62,7 +58,6 @@ const horizontal = (w: number) => typeset(`width:${w}px; line-height:1.6`)
 const A = horizontal(WIDE)
 const B = horizontal(NARROW)
 const V = typeset('height:520px; writing-mode:vertical-rl; letter-spacing:6px', true)
-for (const [name, l] of [['宽栏', A], ['窄栏', B], ['竖排', V]] as const) if (!headsOk(l)) throw new Error(`${name}有句读落在行首，换一个宽度`)
 
 const CY = 500
 const A_O = { x: (W - WIDE) / 2, y: CY - A.height / 2 }
@@ -75,7 +70,6 @@ function layoutAt(width: number): Layout {
   let l = live.get(w)
   if (!l) {
     l = horizontal(w)
-    if (!headsOk(l)) l = layoutAt(w + 1)
     live.set(w, l)
   }
   return l
