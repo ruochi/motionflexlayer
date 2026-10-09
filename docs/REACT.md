@@ -103,12 +103,20 @@ const k = pulse(globalT, tl.times('kick'))
 | --- | --- | --- |
 | `<Place x y anchor opacity rotate scale origin width height>` | `place()` | 定位和变换。`opacity` ≤ 0.002 时整个子树不渲染 |
 | `<Fx draw={(ctx, el) => …} x y width height name>` | `fx()` | canvas 绘制。默认铺满整个画布 |
-| `<Camera x y zoom rotate shakeX shakeY>` | `camera()` | 镜头。默认用画布尺寸 |
 | `<Reveal progress width height direction feather>` | `reveal()` | 蒙版擦除 |
 | `<Roll value cell size axis align items={[…]}>` | `roll()` | 滚动窗口。`items` 用数组 prop 传，不用 children |
 | `<Text style as>` | `text()` | 单行文字，不换行 |
 | `<Box style>` | `box()` | flex 容器 |
 | `<Raw node={…}>` | — | 原样插入核心 API 生成的节点 |
+
+镜头没有组件：直接写取景窗和舞台两层 `<layer>`，参数用核心的 `shot()` 算。取景窗多大、放在哪、几个窗口取同一个舞台，都在 JSX 里看得见：
+
+```tsx
+const cam = shot({ width: 1920, height: 1080, x, y, zoom, shakeX })
+<layer width={1920} height={1080} view={cam.view}>
+  <layer {...cam.stage}>{scene}</layer>
+</layer>
+```
 
 `style` 可以是字符串，也可以是对象。对象的键用驼峰写法，数字会自动加 `px`。`opacity`、`fontWeight`、`lineHeight`、`zIndex`、`flex*`、`order` 这几个不加单位。
 
@@ -173,4 +181,4 @@ Vue 适配放在 v2，思路和 React 相同：
 - 每帧 `createApp(Scene).mount(root)`，转换后 `unmount`，同样不保留跨帧状态；
 - `useFrame()` 用 `inject` 实现，`<Sequence>` 用 `provide` 覆盖局部时间；
 - `draw` 用 prop 传函数，渲染器在 `patchProp` 里原样挂到节点上；
-- 组件名和参数与 React 版一致：`Place`、`Fx`、`Camera`、`Reveal`、`Roll`、`Text`、`Box`、`Raw`、`Sequence`。
+- 组件名和参数与 React 版一致：`Place`、`Fx`、`Reveal`、`Roll`、`Text`、`Box`、`Raw`、`Sequence`。
