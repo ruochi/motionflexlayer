@@ -60,7 +60,7 @@
 | 像素 | `draw` 回调：`fx()` 或任意自定义标签 | 笔触、粒子、光效、数据图、3D 点云 |
 | 时间 | `timeline()`、`progress` / `fade` / `spring` / `pulse` / `stagger` | 一切数值随 t 变化 |
 | 声音 | `audio.clips`、`buses`、`duck`、`tracks` | 旁白、音乐、音效放到 cue 上，由 visualtone 混音 |
-| 旁白 | `narration()`、`vo.caption(t)` | 合成语音，排出段落，逐词字幕 |
+| 旁白 | `narration()`、`f.subtitle` | 合成语音，排出段落。字幕是逐字时间，样式由画面决定 |
 
 ## 2. 硬性约定
 
@@ -85,7 +85,7 @@
 | React 里每帧都是新挂载 | 用 `useState` / `useEffect` 存动画状态 | 只用 `useFrame()` 和纯计算，`useMemo` 只做帧内去重 | 状态每帧丢失 |
 | 预期中的问题写 `expect` | 整个合成 `lint.ignore: ['text-overlap']` | 在那个元素上写 `attrs: { expect: 'text-overlap: 交叉淡化' }` | 真正的 bug 被一起忽略 |
 | 音量看报告，不靠猜 | 直接把增益都设成 0 dB | 跑 `audio` 命令：响度 -16 LUFS 左右，有旁白时“旁白高出音乐”≥ 6 dB，没有 ⚠ | 削波、旁白听不清，或者全片一样响 |
-| 旁白文字和字幕是同一份 | 字幕另写一遍 | 字幕用 `vo.caption(f.t)` | 改了文案，字幕和声音对不上 |
+| 旁白文字和字幕是同一份 | 字幕另写一遍，或在字幕数据里写颜色、字号 | 合成带 `subtitles: vo.subtitles`，画面读 `f.subtitle`，颜色和位置写在帧函数里 | 改了文案，字幕和声音对不上；换一种字幕样子就要改时间数据 |
 
 ## 3. 工作流
 
@@ -157,11 +157,11 @@ export default defineComposition({
 - 返回数组里可以有 `null` / `false`；
 - 结构用节点原语，像素用 `fx` 的 `draw`。
 
-字幕直接读旁白：
+字幕是逐字时间，没有样式。合成上写 `subtitles: vo.subtitles`，帧函数读 `f.subtitle`：
 
 ```ts
-const c = vo.caption(f.t)        // { line, spoken, word, progress, speaking }
-// line.text.slice(0, spoken) 是念过的部分，word 是正在念的词
+const now = f.subtitle          // { line, chars }，每个字有 text、from、to、progress
+// 整词一起变色、逐字弹出、画成字形，都从 chars 来。颜色和位置不在这份数据里。
 ```
 
 画面要跟着声音动（电平表、随旁白跳动的波形、音效起音时闪一下），在合成上写 `envelopes: true`，帧函数里读 `f.audio`：
@@ -262,7 +262,7 @@ npm run mfl -- render comp.ts                 # 成片
 - `narration(lines, { baseDir, voice, rate, cacheDir, offline, lead, gap, hold, tail })`：合成并排期，返回 `Narration`。
 - `vo.lines`：每句的 `from`/`to`（段落）、`speechFrom`/`speechTo`（开口、收声）、`words`（逐词时间和字符位置）。
 - `vo.timeline({ bpm })` / `vo.apply(tl)`：登记段落和 cue。
-- `vo.caption(t)`：字幕读数。`vo.clips({ bus, gain })`：旁白片段。`vo.line(id)`、`vo.lineAt(t)`、`vo.words`。
+- `vo.subtitles`：字幕轨，逐字时间，没有样式。`vo.subtitle(t)` 是某一帧的读数；写进合成之后，帧函数用 `f.subtitle`。`vo.clips({ bus, gain })`：旁白片段。`vo.line(id)`、`vo.lineAt(t)`、`vo.words`。
 - `edgeTts`、`synthesizeCached`：TTS 引擎和缓存，换引擎实现 `TtsEngine` 即可。
 
 **节点：**

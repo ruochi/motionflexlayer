@@ -85,9 +85,51 @@ export default defineComposition({
   const SEPARATE = vo.line('check').words.find((w) => w.text.includes('重叠'))!.from
   ```
 
-- **字幕。** `vo.caption(f.t)` 返回 `{ line, spoken, word, progress, speaking }`。`line.text.slice(0, spoken)` 是念过的部分；`word` 是正在念的词，`progress` 是它的进度。示例里念过的字是墨色，正在念的词是强调色，还没念到的是浅灰。
+- **字幕。** 一份没有样式的逐字时间，画面自己决定怎么画。见下一节。
 - **逐词出现。** `line.words.filter((w) => w.from <= f.t)` 就是已经念出来的词，配 `spring(f.t - w.from)` 逐个弹出。
 - **电平。** 合成写 `envelopes: true` 后，`f.audio.level('voice')` 是旁白此刻的电平，可以驱动波形、口型、光晕。
+
+## 字幕
+
+字幕轨只有文字和时间：哪一句、每个字从几秒到几秒。没有颜色、字号、位置、字体。同一份数据可以烧进画面、交给播放器，或者逐字做成动画。
+
+```ts
+export default defineComposition({
+  subtitles: vo.subtitles,          // 合成带上这轨，帧函数才能读到 f.subtitle
+  render: (f) => {
+    const now = f.subtitle          // 没有旁白的合成里是 undefined
+    if (!now) return []
+    // now.chars[i].progress 是这个字自己的 0..1
+    // now.chars[i].word 是它在 now.line.words 里的序号
+    // 词尾的标点不占时长：from === to，等于这个词的结束
+  },
+})
+```
+
+词的时长均分给词里的字。想整词一起亮，看 `line.words[ch.word].from`；想逐字出来，用 `ch.progress` 或 `ch.from`。
+
+逐字绘制不必走 HTML 的 `style`。`chars` 的序号和 `drawGlyphs` 的字形序号一致：
+
+```ts
+render: (f) => fx({ width: 1920, height: 1080 }, (ctx) => {
+  const now = f.subtitle
+  if (!now) return
+  drawGlyphs(ctx, now.line.text, {
+    x: 960, y: 1000, font: font(44), color: '#efe7d6', align: 'center',
+    each: (g) => ({ alpha: 0.35 + 0.65 * now.chars[g.index]!.progress, dy: (1 - now.chars[g.index]!.progress) * 12 }),
+  })
+})
+```
+
+导出给别的渲染器（播放器、剪辑软件）时也不带样式：
+
+```bash
+npm run mfl -- subs examples/narrated/index.ts
+# out/narrated/narrated.vtt        一句一条的 WebVTT，没有 STYLE
+# out/narrated/narrated.subs.json  逐字时间
+```
+
+`render` 和 `subs` 都写到输出目录，默认 `out/<id>/`。
 
 ## 声音
 
