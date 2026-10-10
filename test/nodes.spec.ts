@@ -45,6 +45,15 @@ describe('typewriter', () => {
     expect(spans.length).toBe(2)
     expect(String(spans[1]!.attrs.style)).toContain('rgba(0,0,0,0)')
   })
+
+  it('每段的样式由调用方给；占位部分保留字重等样式，只把颜色换成透明', () => {
+    const n = typewriter([{ text: 'ab', style: { color: '#123456', fontWeight: 800 }, id: 'k' }, 'cd'], 1)
+    const spans = n.children as FvgNode[]
+    expect(spans.map((s) => s.attrs.style)).toEqual(['color:#123456; font-weight:800', 'font-weight:800; color:rgba(0,0,0,0)', 'color:rgba(0,0,0,0)'])
+    expect(spans[0]!.attrs.id).toBe('k')
+    const hidden = typewriter([{ text: 'ab', style: 'color:red; letter-spacing:2px' }], 0).children[0] as FvgNode
+    expect(hidden.attrs.style).toBe('letter-spacing:2px; color:rgba(0,0,0,0)')
+  })
 })
 
 describe('shot', () => {

@@ -27,11 +27,14 @@ import { Box, Fx, Place, Reveal, Roll, Sequence, Text, fromReact, useFrame } fro
 
 const W = 1920
 const H = 1080
-const BG = '#0b0d12'
-const INK = '#f2efe8'
-const MUTED = '#8a93a3'
-const ACCENT = '#7ee0c3'
-const WARM = '#ffb547'
+
+// 这支片子的样子：白底、深蓝灰的字、青绿的柱子、最后一根和总数用橙色，像一张干净的报表。
+// 这是 hello-react 的选择，不是框架默认。新片子按需求重写这一块。
+const BG = '#fbfaf7'
+const INK = '#14213d'
+const MUTED = '#5f6b7a'
+const ACCENT = '#1f9d8b'
+const WARM = '#ee6c2f'
 
 const tl = timeline({ bpm: 120, duration: 6 }).section('in', 0).section('data', 1).section('out', 5)
 tl.cue('bar', tl.beats(2, 9, 0.5)).cue('total', tl.beat(9.5)).cue('whoosh', [0.25])
@@ -44,7 +47,7 @@ function Header() {
   return (
     <Place x={160} y={170 - (1 - e) * 30} anchor="left" opacity={Math.min(1, t / 0.3)}>
       <Box style={{ display: 'flex', flexDirection: 'column', alignItems: 'start', gap: 12 }}>
-        <Text style={{ fontSize: 24, color: ACCENT, letterSpacing: 8 }}>MONTHLY RENDERS</Text>
+        <Text style={{ fontSize: 28, fontWeight: 600, color: ACCENT }}>月度报表</Text>
         <Reveal progress={progress(t, 0.15, 0.9, 'outCubic')} width={1100} height={96}>
           <Place x={0} y={48} anchor="left">
             <Text as="h1" style={{ fontSize: 76, fontWeight: 800, color: INK }}>
@@ -93,14 +96,14 @@ function Bars({ values }: { values: number[] }) {
           const hot = i === n - 1
           const grad = ctx.createLinearGradient(0, y, 0, el.h - 60)
           grad.addColorStop(0, hot ? WARM : ACCENT)
-          grad.addColorStop(1, rgba(hot ? WARM : ACCENT, 0.15))
+          grad.addColorStop(1, rgba(hot ? WARM : ACCENT, 0.55))
           ctx.fillStyle = grad
           ctx.beginPath()
           ctx.roundRect(x, y, bw, hgt, [10, 10, 2, 2])
           ctx.fill()
           ctx.globalAlpha = Math.min(1, local / 0.2)
           ctx.fillStyle = MUTED
-          ctx.font = font(20, 500)
+          ctx.font = font(24, 500)
           ctx.textAlign = 'center'
           ctx.fillText(MONTHS[i]!, x + bw / 2, el.h - 24)
           ctx.globalAlpha = 1
@@ -122,7 +125,7 @@ function Total({ values }: { values: number[] }) {
   return (
     <Place x={W - 160} y={170} anchor="right" scale={1 + (done > 0 ? 0.08 * Math.sin(Math.min(1, done) * Math.PI) : 0)}>
       <Box style={{ display: 'flex', flexDirection: 'column', alignItems: 'end', gap: 6 }}>
-        <Text style={{ fontSize: 24, color: MUTED, letterSpacing: 6 }}>TOTAL FRAMES</Text>
+        <Text style={{ fontSize: 28, fontWeight: 600, color: MUTED }}>总帧数</Text>
         <Text style={{ fontSize: 72, fontWeight: 800, color: done > 0 ? WARM : INK }}>{value.toLocaleString('en-US')}</Text>
       </Box>
     </Place>
@@ -142,7 +145,7 @@ function Ticker() {
           cell={36}
           size={200}
           items={labels.map((s) => (
-            <Text style={{ fontSize: 24, color: INK, letterSpacing: 4 }}>{s}</Text>
+            <Text style={{ fontSize: 26, color: INK }}>{s}</Text>
           ))}
         />
       </Box>

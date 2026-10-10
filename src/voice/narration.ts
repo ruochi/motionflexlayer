@@ -102,9 +102,10 @@ export type SubtitleLine = {
 /** 整条字幕轨。可以交给别的渲染器，也可以写进合成的 `subtitles`。 */
 export type SubtitleTrack = { lines: SubtitleLine[] }
 
-/** 某一帧的字幕。`progress` 是这个字自己的 0..1，不含任何样式。 */
+/** 某一帧的字幕。`progress` 是这个词、这个字自己的 0..1，不含任何样式。 */
 export type SubtitleNow = {
   line: SubtitleLine
+  words: Array<SubtitleWord & { progress: number }>
   chars: Array<SubtitleChar & { progress: number }>
 }
 
@@ -174,7 +175,16 @@ export function subtitleAt(track: SubtitleTrack, t: number): SubtitleNow | undef
   let line: SubtitleLine | undefined
   for (const l of track.lines) if (l.from <= t + 1e-9) line = l
   if (!line) return undefined
-  return { line, chars: line.chars.map((ch) => ({ ...ch, progress: charProgress(ch, t) })) }
+  return {
+    line,
+    words: line.words.map((w) => ({ ...w, progress: charProgress(w, t) })),
+    chars: line.chars.map((ch) => ({ ...ch, progress: charProgress(ch, t) })),
+  }
+}
+
+/** 字所在那个词的进度；引擎没对上词的字（开头的引号）用它自己的进度，时间和下一个词的开口一样。 */
+export function wordProgress(now: SubtitleNow, ch: SubtitleChar & { progress: number }): number {
+  return ch.word != null ? (now.words[ch.word]?.progress ?? ch.progress) : ch.progress
 }
 
 const vttTime = (t: number) => {
@@ -245,6 +255,18 @@ export class Narration {
     let found: PlannedLine | undefined
     for (const l of this.lines) if (l.from <= t) found = l
     return found
+  }
+
+  /** 这一句里第 nth 个含 text 的词。找不到就报错：改了文案，动作该跟着改。 */
+  word(id: string, text: string, nth = 0): PlannedWord {
+    const w = this.line(id).words.filter((x) => x.text.includes(text))[nth]
+    if (!w) throw new Error(`旁白 ${id} 里没有第 ${nth + 1} 个含“${text}”的词`)
+    return w
+  }
+
+  /** 这一句里第 nth 个含 text 的词开口的时刻。画面动作卡在词上，改了文案、换了音色都跟着走。 */
+  at(id: string, text: string, nth = 0): number {
+    return this.word(id, text, nth).from
   }
 
   /** 全部词，按时间排。 */

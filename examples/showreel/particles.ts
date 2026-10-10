@@ -12,15 +12,13 @@ import {
   W,
 } from './timeline.js'
 import { clamp, easeInOutCubic, mixHex, mulberry32, noise1, simplex3, type Vec } from './compat.js'
+import { LAYER_COLORS, TEXT_LEFT, TEXT_RIGHT } from './look.js'
 
 export const N = 2400
 export const SIM_HZ = 120
 const SIM_END = SCATTER
 const STEPS = Math.ceil((SIM_END - BURST) * SIM_HZ)
 
-export const LAYER_COLORS = ['#f4f1ea', '#4fd1ff', '#8b7bff', '#ff5d73']
-const TEXT_LEFT = '#ffcf7a'
-const TEXT_RIGHT = '#ff6a7f'
 
 export const TEXT = '<draw>'
 export const TEXT_FONT = `800 300px ${DEFAULT_FONT}`

@@ -1,7 +1,7 @@
 import { DEFAULT_FONT, createCanvas, type Canvas2D as CanvasRenderingContext2D } from 'motionflexlayer'
 import { ECHO_SCALE, contour, geoState, vertices } from './geometry.js'
+import { AMBER, BG, CORAL, CYAN, INK, LAYER_COLORS, MUTED, VIOLET } from './look.js'
 import {
-  LAYER_COLORS,
   N as PN,
   SPARKLES,
   TEXT,
@@ -65,13 +65,6 @@ import {
 
 type Ctx = CanvasRenderingContext2D
 
-export const BG = '#07080d'
-export const INK = '#f4f1ea'
-export const MUTED = '#8d97a8'
-export const AMBER = '#ffb547'
-export const CORAL = '#ff5d73'
-export const CYAN = '#4fd1ff'
-export const VIOLET = '#8b7bff'
 
 const FONT = DEFAULT_FONT
 

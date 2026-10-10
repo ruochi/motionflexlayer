@@ -19,8 +19,10 @@ import {
   progress,
   pulse,
   rgba,
+  runs,
   spring,
   text,
+  wordProgress,
   type Child,
   type Frame,
   type PlannedLine,
@@ -28,6 +30,11 @@ import {
 
 const W = 1920
 const H = 1080
+
+// ---------------------------------------------------------------- 0. 样子：这支片子自己的选择
+// 米色纸面、墨色字、一个朱红强调、一个墨绿辅助，版式像排好的讲义。
+// 这一块不是框架默认，新片子按需求重写，不要沿用。下面的画面代码只从这里取颜色。
+
 const PAPER = '#f2ede3'
 const INK = '#1f1c18'
 const DIM = '#b9b0a2'
@@ -52,7 +59,7 @@ const lines = vo.lines
 const L = Object.fromEntries(lines.map((l) => [l.id, l])) as Record<string, PlannedLine>
 
 /** 念到"重叠"时卡片分开，"没有问题"和提示音跟着落下。 */
-const SEPARATE = (L.check!.words.find((w) => w.text.includes('重叠')) ?? L.check!.words[0]!).from
+const SEPARATE = vo.at('check', '重叠')
 const RESOLVED = SEPARATE + 0.6
 
 /** 本段的入场、出场：段首 0.35s 淡入，段尾 0.3s 淡出。 */
@@ -113,24 +120,17 @@ function caption(f: Frame) {
   const now = f.subtitle
   if (!now) return null
   const a = presence(f.t, now.line)
-  const active = now.line.words.find((w) => f.t >= w.from && f.t < w.to)
-  const spoken = f.t >= now.line.speechTo ? now.line.text.length : now.line.words.reduce((e, w) => (f.t >= w.from ? w.end : e), 0)
-  const said = active ? active.start : spoken
-  const through = active ? active.end : spoken
-  const spans: Array<{ text: string; color: string; id?: string }> = []
-  for (const ch of now.chars) {
-    const color = ch.start < said ? INK : ch.start < through ? ACCENT : DIM
-    const id = color === ACCENT ? 'word' : undefined
-    const last = spans.at(-1)
-    if (last && last.color === color) last.text += ch.text
-    else spans.push({ text: ch.text, color, id })
-  }
+  const done = f.t >= now.line.speechTo
+  const spans = runs(now.chars, (ch) => {
+    const p = done ? 1 : wordProgress(now, ch)
+    return p >= 1 ? INK : p > 0 ? ACCENT : DIM
+  })
   return place(
     { x: W / 2, y: 930, opacity: a },
     h(
       'p',
       { style: 'white-space:nowrap; font-size:50px; font-weight:600; letter-spacing:0.02em' },
-      ...spans.map((s) => h('span', { id: s.id, style: `color:${s.color}` }, s.text)),
+      ...spans.map((s) => h('span', { id: s.key === ACCENT ? 'word' : undefined, style: `color:${s.key}` }, s.text)),
     ),
   )
 }

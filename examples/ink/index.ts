@@ -10,12 +10,15 @@
  *   optics.ts  玻璃折射、立体字：glass、extrude、perspective。
  *   page.ts    镜头推向排版算出的一点、按着墨对齐、收尾：origin="x y"、checkFvg()、anchor-box="ink"。
  *   sound.ts   配乐和音效，用的是画面的时间点。
+ *   look.ts    这支片子的色板和字体。夜色加朱红是它自己的选择，新片子不要沿用。
+ *   kit.ts     这支片子共用的章节标签、进度点、字幕、印章。
  *
  * 几处衔接：片头的书法字飞进段落里自己的格子；竖排里的三个字留下来做描边；描边漫开成下一段的红底；
  * 立体字转回正面、缩回平面，正好是下一页里那个放大了 15 倍的“墨”；镜头停在“这里”，盒子和着墨引出报告。
  */
 import { defineComposition } from 'motionflexlayer'
-import { C, chapter, dots, H, subtitle, vo, W } from './kit.js'
+import { chapter, dots, H, subtitle, vo, W } from './kit.js'
+import { C } from './look.js'
 import { opticsScenes } from './optics.js'
 import { pageScenes } from './page.js'
 import { tracks } from './sound.js'

@@ -50,6 +50,8 @@ export {
   reveal,
   typewriter,
   tokenLength,
+  placeGlyph,
+  type GlyphPose,
   type Anchor,
   type Origin,
   originAttr,
@@ -70,14 +72,25 @@ export {
   font,
   measureGlyphs,
   drawGlyphs,
-  strokeGlow,
-  glowDot,
   sampleTextPoints,
   type Glyph,
   type GlyphStyle,
   type DrawGlyphsOptions,
   type TextPointsOptions,
 } from './drawkit.js'
+export {
+  boundsOf,
+  unionBounds,
+  mapBounds,
+  poseBounds,
+  edgeRoom,
+  glyphBounds,
+  expects,
+  pathLength,
+  type Bounds,
+  type Pose,
+} from './geometry.js'
+export { runs, type Run } from './text.js'
 export { DEFAULT_FONT, createCanvas, loadImage, registerFont, ensureFonts, type Canvas2D, type OffscreenCanvas } from './canvas.js'
 export { renderFrame, renderRgba, type FrameResult, type RgbaFrame } from './render/frame.js'
 export { renderStills, contactSheet, type StillsOptions, type StillsResult } from './render/stills.js'
@@ -98,6 +111,7 @@ export {
   subtitleTrack,
   subtitleAt,
   charProgress,
+  wordProgress,
   toVtt,
   Narration,
   type NarrationLine,
