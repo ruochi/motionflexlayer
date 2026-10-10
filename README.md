@@ -43,7 +43,6 @@ flexlayer 和 visualtone 以 git 依赖的方式固定在具体提交上，`npm 
 ```bash
 git clone https://github.com/ruochi/motionflexlayer
 cd motionflexlayer && npm i
-npm run assets          # 生成示例用的音频文件
 ```
 
 要合成新的旁白，还需要 Python 3 和 edge-tts（需要联网）：
@@ -52,7 +51,7 @@ npm run assets          # 生成示例用的音频文件
 pip install edge-tts     # 解释器不是 python3 时，用环境变量 MFL_PYTHON 指定
 ```
 
-旁白音频会缓存在仓库里（例如 `examples/narrated/voice/`），文案和音色没变就不会重新合成。离线环境设 `MFL_TTS_OFFLINE=1`：缓存缺失时直接报错，而不是去联网。
+旁白音频会缓存在仓库里（`examples/ink/voice/`），文案和音色没变就不会重新合成。离线环境设 `MFL_TTS_OFFLINE=1`：缓存缺失时直接报错，而不是去联网。
 
 需要 ffmpeg。程序按以下顺序查找：
 
@@ -65,30 +64,21 @@ pip install edge-tts     # 解释器不是 python3 时，用环境变量 MFL_PYT
 ## 命令
 
 ```bash
-npm run mfl -- stills examples/hello/index.ts            # 均匀取 12 帧，生成联系表
-npm run mfl -- stills examples/hello/index.ts 2.1 4.05   # 指定时刻
-npm run mfl -- check  examples/hello/index.ts            # 逐帧排版检查，汇总问题
-npm run mfl -- audio  examples/hello/index.ts            # WAV、波形图、电平报告
-npm run mfl -- render examples/hello/index.ts            # 多进程渲染 mp4，带音轨
-npm run mfl -- render examples/hello/index.ts --scale 0.5 --fps 30 --from 2 --to 6   # 草稿
-npm run mfl -- cues   examples/hello/index.ts            # 导出时间轴 JSON
-npm run voice -- examples/narrated/index.ts              # 合成或读取旁白，按段列出时间和语速
+npm run mfl -- stills examples/ink/index.ts            # 均匀取 12 帧，生成联系表
+npm run mfl -- stills examples/ink/index.ts 2.1 8.4   # 指定时刻
+npm run mfl -- check  examples/ink/index.ts            # 逐帧排版检查，汇总问题
+npm run mfl -- audio  examples/ink/index.ts            # WAV、波形图、电平报告
+npm run mfl -- render examples/ink/index.ts            # 多进程渲染 mp4，带音轨
+npm run mfl -- render examples/ink/index.ts --scale 0.5 --fps 30 --from 2 --to 6   # 草稿
+npm run mfl -- cues   examples/ink/index.ts            # 导出时间轴 JSON
+npm run voice -- examples/ink/index.ts                 # 合成或读取旁白，按段列出时间和语速
 ```
 
 输出在 `out/<id>/` 下。
 
 ## 示例
 
-示例演示写法，不是模板。每个示例的样子都写在自己的 `look.ts`（narrated 和 hello-react 写在入口顶上），彼此故意不一样。
-
-| 示例 | 内容 |
-| --- | --- |
-| [examples/hello](examples/hello/index.ts) | 10 秒，核心写法的最小完整示例：逐字弹簧标题、蒙版擦除、节拍计数器、打字机、冲击震屏，配 BGM 和音效。明黄底、近黑粗字 |
-| [examples/hello-react](examples/hello-react/index.tsx) | 6 秒，React 写法：柱状图逐根长出、数字滚动、状态标签。白底报表 |
-| [examples/showreel](examples/showreel/index.ts) | 48 秒、六段的参考片：几何、粒子、版式、3D 点云、落款。整首配乐用代码合成。深底加琥珀光、颗粒暗角 |
-| [examples/narrated](examples/narrated/index.ts) | 约 33 秒的中文旁白片：时间轴由旁白长度决定，逐词字幕、人声波形、音乐给人声让频段、排版检查演示。米色纸面讲义 |
-| [examples/ink](examples/ink/index.ts) | 72 秒、九个镜头的旁白片「着墨」：书法字一笔笔写出后落进段落里自己的格子，拖动栏宽逐帧重排再改竖排，三个字合成一圈墨迹描边，玻璃折射，挤出的立体字，镜头推向排版算出的一点，按着墨对齐。每个镜头都是网页或手写 canvas 要多费不少力气的事 |
-| [examples/synth](examples/synth/index.ts) | 程序化合成器套件，showreel 的配乐用的就是它 |
+仓库里只有一支片子：[examples/ink](examples/ink/index.ts)，72 秒的旁白片「着墨」。它用来看框架怎么接上旁白、字幕、镜头、字形、描边、玻璃和立体字。夜色底、楷书和朱红印章写在 `examples/ink/look.ts`，是这支片子的选择，不是模板。新片子从需求重写自己的 `look.ts`。
 
 ## 目录
 
@@ -112,6 +102,6 @@ src/
 - 核心写法和 React 写法可用；Vue 计划放在 v2，设计见 [REACT.md](docs/REACT.md#vuev2-计划)。
 - 视频帧走 flexlayer 的 `renderFrames` 原始 RGBA 输出，0.1 的 PNG 跳过垫片已删除。
 - 混音交给 visualtone：响度归一、限幅、人声闪避和分析报告都来自它。设了 `envelopes: true` 的合成，帧函数可以通过 `f.audio` 读到各音轨的电平和起音。
-- 依赖 flexlayer 0.2.30：镜头用 `view` 取景，`shot()` 算参数，结构由调用方写两层 layer；字号按屏幕上的大小和短边检查，示例都不再整类忽略问题码。还需要 flexlayer 配合的改动见 [FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)，例如离屏画布按可见区域裁剪、被取景窗裁开的文字怎么报 `outside-safe`。
+- 依赖 flexlayer 0.2.40、visualtone 当前主线。镜头用 `view` 取景，`shot()` 算参数，结构由调用方写两层 layer；字号按屏幕上的大小和短边检查。还需要 flexlayer 配合的改动见 [FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)，例如离屏画布按可见区域裁剪、被取景窗裁开的文字怎么报 `outside-safe`。
 - 框架不带视觉风格：0.2 里的 `strokeGlow`、`glowDot` 已删除（写法见 RECIPES 的“质感”），`typewriter` 的 token 从 `[文字, 颜色]` 改成 `{ text, style }`，字幕只出逐字时间。
 - 音频是按响度报告、频段分析和波形检查的，没有人工试听过。

@@ -10,13 +10,7 @@
 
 片段里的数值（弹簧参数、间隔、字距、幅度）是能跑通的起点，不是推荐值，按片子的节奏改。发光、颗粒、HUD 这些质感属于某支片子，需求里没有理由就不加。
 
-对照完整示例：
-
-- [examples/hello](../examples/hello/index.ts)：核心写法，10 秒；
-- [examples/hello-react](../examples/hello-react/index.tsx)：React 写法；
-- [examples/showreel](../examples/showreel/index.ts)：48 秒、六段的参考片。
-
-几个示例的样子各不相同，都写在各自的 `look.ts` 里，只属于那支片子。
+仓库里的片子是 [examples/ink](../examples/ink/index.ts)。字形、推镜、按着墨对齐在那里；它的配色和版式不要照搬。React 写法见 [REACT.md](REACT.md)。
 
 ## 目录
 
@@ -222,7 +216,7 @@ const z = Math.exp(Math.log(16) * progress(f.t, 30.5, 32, 'inOutCubic'))   // �
 const cam = shot({ width: W, height: H, x: 1160, y: 575, zoom: z })
 ```
 
-如果要让目标点在缩放的同时从原位滑到画面中心，令 `x = 目标 + (中心 - 屏幕位置) / zoom`。showreel 的 `layoutScene` 就是这样写的。
+如果要让目标点在缩放的同时从原位滑到画面中心，令 `x = 目标 + (中心 - 屏幕位置) / zoom`。
 
 **推向排版算出的一点。** 目标点不必手填：先用 `canvas.create` 量一遍整页，把要看的字包一层 `<span id="here">`，`text[].lines[].chars` 里带这个 `id` 的字就是它，格子中心就是 `shot` 的 `x`、`y`。改了正文、换了栏宽，镜头还是对准那几个字。要在窗外画框标出它，用 `mapBounds(盒子, cam.toScreen)` 换成成片像素的外接框。见 `examples/ink/page.ts`。
 
@@ -355,7 +349,7 @@ defineComposition({ …, setup: setupSim, render: … })
 const targets = sampleTextPoints('<draw>', { font: font(300, 800), width: W, height: H, step: 3 })
 ```
 
-聚合时，粒子沿“当前位置 → 目标”的方向前进，同时在法线方向加一段 `sin(π·e)` 的弧，路径看起来像被吸进去。具体写法见 showreel 的 `particles.ts`。
+聚合时，粒子沿“当前位置 → 目标”的方向前进，同时在法线方向加一段 `sin(π·e)` 的弧，路径看起来像被吸进去。
 
 ## 3D 投影
 
@@ -381,7 +375,7 @@ for (const p of proj) {
 
 ## 质感：颗粒、暗角、光
 
-这一节的东西都是样子，不是必需品。showreel 用了全套，hello 和 narrated 一样也没用。
+这一节的东西都是样子，不是必需品。着墨没有用颗粒和暗角。
 
 **最后一层 post。** 放在返回数组的最后，不放进取景窗：
 
@@ -400,7 +394,7 @@ fx({ width: W, height: H, name: 'post' }, (ctx) => {
 })
 ```
 
-**发光线条。** 同一条路径画两遍：先用宽而淡的笔加 `shadowBlur` 画光晕，再画实线。不要用 `lighter` 混合叠很多短线段，那样会出现一串串珠子似的亮点。框架不带发光的工具函数，showreel 的 `draws.ts` 里是它自己的写法。
+**发光线条。** 同一条路径画两遍：先用宽而淡的笔加 `shadowBlur` 画光晕，再画实线。不要用 `lighter` 混合叠很多短线段，那样会出现一串串珠子似的亮点。框架不带发光的工具函数。
 
 ```ts
 ctx.save()
