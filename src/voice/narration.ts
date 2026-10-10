@@ -67,19 +67,130 @@ export type PlannedLine = {
   data?: Record<string, unknown>
 }
 
-export type Caption = {
-  line: PlannedLine
-  /** 已经念到第几个字符（含标点），0..text.length。 */
-  spoken: number
-  /** 正在念的词。句间留白时为 undefined。 */
-  word?: PlannedWord
-  /** 当前词内的进度 0..1。 */
-  progress: number
-  /** 是否在说话。 */
-  speaking: boolean
+/** 字幕里的一个词。只有文字和时间，没有颜色、字号、位置。 */
+export type SubtitleWord = { text: string; from: number; to: number; start: number; end: number }
+
+/**
+ * 字幕里的一个码点。时间是从所在词均分来的；标点不占时长，`from === to`，跟前一个字一起结束。
+ * 没有颜色、字号、位置。怎么画由画面自己决定。
+ */
+export type SubtitleChar = {
+  text: string
+  /** 在这句里的码点序号，和 `drawGlyphs` 的字形序号一致。 */
+  index: number
+  /** 在 `text` 里的 UTF-16 区间。 */
+  start: number
+  end: number
+  from: number
+  to: number
+  /** 所在词的序号。引擎没对上的字没有。 */
+  word?: number
+}
+
+export type SubtitleLine = {
+  id: string
+  text: string
+  index: number
+  from: number
+  to: number
+  speechFrom: number
+  speechTo: number
+  words: SubtitleWord[]
+  chars: SubtitleChar[]
+}
+
+/** 整条字幕轨。可以交给别的渲染器，也可以写进合成的 `subtitles`。 */
+export type SubtitleTrack = { lines: SubtitleLine[] }
+
+/** 某一帧的字幕。`progress` 是这个字自己的 0..1，不含任何样式。 */
+export type SubtitleNow = {
+  line: SubtitleLine
+  chars: Array<SubtitleChar & { progress: number }>
 }
 
 const PUNCT = /[\s，。、；：？！,.;:?!…—\-·「」『』“”"'（）()《》]/
+const r4 = (v: number) => Math.round(v * 1e4) / 1e4
+
+/** 把一句的逐词时间拆成逐字时间。 */
+export function subtitleChars(text: string, words: PlannedWord[]): SubtitleChar[] {
+  const points: Array<{ text: string; start: number; end: number; index: number }> = []
+  let utf = 0
+  let index = 0
+  for (const ch of text) {
+    points.push({ text: ch, start: utf, end: utf + ch.length, index })
+    utf += ch.length
+    index++
+  }
+  const wordAt = points.map((p) => words.findIndex((w) => p.start >= w.start && p.start < w.end))
+  const out: SubtitleChar[] = points.map((p, i) => {
+    const wi = wordAt[i]!
+    if (wi < 0) return { ...p, from: 0, to: 0 }
+    const w = words[wi]!
+    if (PUNCT.test(p.text)) return { ...p, from: w.to, to: w.to, word: wi }
+    const spoken = points.filter((q, j) => wordAt[j] === wi && !PUNCT.test(q.text))
+    const ord = spoken.findIndex((q) => q.index === p.index)
+    const n = Math.max(1, spoken.length)
+    const from = w.from + (ord * (w.to - w.from)) / n
+    const to = ord === spoken.length - 1 ? w.to : w.from + ((ord + 1) * (w.to - w.from)) / n
+    return { ...p, from: r4(from), to: r4(to), word: wi }
+  })
+  for (let i = 0; i < out.length; i++) {
+    if (out[i]!.word != null) continue
+    const next = out.slice(i + 1).find((c) => c.word != null)
+    let prev: SubtitleChar | undefined
+    for (let j = i - 1; j >= 0; j--) if (out[j]!.word != null) { prev = out[j]; break }
+    const t = next ? words[next.word!]!.from : (prev?.to ?? words[0]?.from ?? 0)
+    out[i]!.from = t
+    out[i]!.to = t
+  }
+  return out
+}
+
+export function subtitleTrack(lines: PlannedLine[]): SubtitleTrack {
+  return {
+    lines: lines.map((l) => ({
+      id: l.id,
+      text: l.text,
+      index: l.index,
+      from: l.from,
+      to: l.to,
+      speechFrom: l.speechFrom,
+      speechTo: l.speechTo,
+      words: l.words.map((w) => ({ text: w.text, from: w.from, to: w.to, start: w.start, end: w.end })),
+      chars: subtitleChars(l.text, l.words),
+    })),
+  }
+}
+
+/** 这个字念到哪。标点（from === to）在那一刻直接是 1。 */
+export function charProgress(ch: { from: number; to: number }, t: number): number {
+  if (t < ch.from) return 0
+  if (!(ch.to > ch.from)) return 1
+  return Math.min(1, (t - ch.from) / (ch.to - ch.from))
+}
+
+/** t 所在那一句的逐字读数。t 在第一句之前时没有。 */
+export function subtitleAt(track: SubtitleTrack, t: number): SubtitleNow | undefined {
+  let line: SubtitleLine | undefined
+  for (const l of track.lines) if (l.from <= t + 1e-9) line = l
+  if (!line) return undefined
+  return { line, chars: line.chars.map((ch) => ({ ...ch, progress: charProgress(ch, t) })) }
+}
+
+const vttTime = (t: number) => {
+  const ms = Math.max(0, Math.round(t * 1000))
+  const h = Math.floor(ms / 3600000)
+  const m = Math.floor(ms / 60000) % 60
+  const s = Math.floor(ms / 1000) % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`
+}
+
+/** WebVTT。一句一条，只有文字和时间，没有样式块。开口到这一段结束（含句后停留）。 */
+export function toVtt(track: SubtitleTrack): string {
+  const cues = track.lines.filter((l) => l.text.trim() && l.to > l.speechFrom)
+  const body = cues.map((l, i) => `${i + 1}\n${vttTime(l.speechFrom)} --> ${vttTime(l.to)}\n${l.text}`).join('\n\n')
+  return `WEBVTT\n\n${body}\n`
+}
 
 /** 把引擎给的词对回原文的字符位置。引擎会丢掉标点，也可能改写数字，对不上的词占一个空位。 */
 export function alignWords(text: string, words: SpokenWord[], offset: number): PlannedWord[] {
@@ -111,13 +222,17 @@ function estimateWords(text: string, duration: number): SpokenWord[] {
  * 旁白：先念出来，再按念出来的长度排时间。
  *
  * 每句一段：留白（pre）→ 说话 → 停留（post），段落首尾相接。全片时长、段落、cue 都从这里来，
- * 画面按段落编排，音乐按段落起伏，字幕按逐词时间高亮。改了文案只要重跑，时间全部跟着变。
+ * 画面按段落编排，音乐按段落起伏，字幕是逐字时间、不带样式。改了文案只要重跑，时间全部跟着变。
  */
 export class Narration {
+  readonly subtitles: SubtitleTrack
+
   constructor(
     readonly lines: PlannedLine[],
     readonly duration: number,
-  ) {}
+  ) {
+    this.subtitles = subtitleTrack(lines)
+  }
 
   line(id: string): PlannedLine {
     const l = this.lines.find((x) => x.id === id)
@@ -137,19 +252,9 @@ export class Narration {
     return this.lines.flatMap((l) => l.words)
   }
 
-  /** 字幕读数。 */
-  caption(t: number): Caption | undefined {
-    const line = this.lineAt(t)
-    if (!line) return undefined
-    let spoken = 0
-    let word: PlannedWord | undefined
-    for (const w of line.words) {
-      if (w.from <= t) spoken = t >= w.to ? w.end : w.start
-      if (w.from <= t && t < w.to) word = w
-    }
-    if (t >= line.speechTo) spoken = line.text.length
-    const progress = word ? Math.min(1, (t - word.from) / Math.max(1e-6, word.to - word.from)) : 0
-    return { line, spoken, word, progress, speaking: t >= line.speechFrom && t < line.speechTo }
+  /** 这一帧的字幕：每个字的文字和时间，没有颜色、字号、位置。 */
+  subtitle(t: number): SubtitleNow | undefined {
+    return subtitleAt(this.subtitles, t)
   }
 
   /** 旁白片段，放进 audio.clips。默认进 'voice' 母线，音乐用 duck.by: 'voice' 给它让路。 */

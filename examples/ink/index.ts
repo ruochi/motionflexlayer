@@ -29,6 +29,7 @@ export default defineComposition({
   background: C.night,
   color: C.paper,
   timeline: vo.timeline(),
+  subtitles: vo.subtitles,
   render: (f) => [...typeScenes(f), ...opticsScenes(f), ...pageScenes(f), ...chapter(f), dots(f), subtitle(f)],
   audio: () => ({
     clips: vo.clips(),

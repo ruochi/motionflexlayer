@@ -2,6 +2,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { basename, extname, join, resolve } from 'node:path'
 import { loadComposition, type Composition } from './composition.js'
+import { toVtt } from './voice/narration.js'
 import { formatAudioReport } from './audio/analyze.js'
 import { renderAudio } from './audio/render.js'
 import { renderFrame } from './render/frame.js'
@@ -26,6 +27,7 @@ const HELP = `motionflexlayer <命令> <合成入口> [选项]
       --no-audio
   audio <entry>              只混音：WAV + 波形图 + 电平报告
   cues <entry>               导出时间轴（节拍、段落、cue）JSON，给剪辑软件或作曲用
+  subs <entry>               导出字幕：.vtt 一句一条，.subs.json 逐字时间。都没有样式
   voice <entry>              合成或读取旁白缓存，按段列出起止时间、字数和语速
 
 通用
@@ -127,6 +129,7 @@ async function main() {
     console.log(res.issues.format())
     if (res.audio) console.log(formatAudioReport(res.audio.report))
     console.log(res.out)
+    await writeSubtitles(comp, outDir, id)
     return
   }
 
@@ -145,6 +148,15 @@ async function main() {
     await mkdir(resolve(out, '..'), { recursive: true })
     await writeFile(out, JSON.stringify({ fps: comp.fps, ...comp.tl.toJSON() }, null, 2))
     console.log(out)
+    return
+  }
+
+  if (cmd === 'subs') {
+    if (!comp.subtitles) {
+      console.log('这个合成没有字幕轨（defineComposition 的 subtitles）')
+      return
+    }
+    await writeSubtitles(comp, outDir, id)
     return
   }
 
@@ -170,6 +182,17 @@ async function main() {
 
   console.error(`未知命令：${cmd}\n\n${HELP}`)
   process.exit(1)
+}
+
+async function writeSubtitles(comp: Composition, outDir: string, id: string): Promise<void> {
+  if (!comp.subtitles) return
+  await mkdir(outDir, { recursive: true })
+  const json = join(outDir, `${id}.subs.json`)
+  const vtt = join(outDir, `${id}.vtt`)
+  await writeFile(json, `${JSON.stringify(comp.subtitles, null, 2)}\n`)
+  await writeFile(vtt, toVtt(comp.subtitles))
+  console.log(json)
+  console.log(vtt)
 }
 
 main().catch((err) => {
