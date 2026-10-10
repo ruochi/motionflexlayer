@@ -14,6 +14,7 @@ import {
   fx,
   lerp,
   place,
+  placeGlyph,
   progress,
   reveal,
   rgba,
@@ -24,7 +25,8 @@ import {
   type Frame,
   type Shot,
 } from 'motionflexlayer'
-import { at, C, glyphAt, H, L, LATIN, seal, W } from './kit.js'
+import { at, H, L, seal, W } from './kit.js'
+import { C, LATIN } from './look.js'
 
 // ---------------------------------------------------------------- 一页文字
 
@@ -147,7 +149,7 @@ function cameraScene(f: Frame): Child[] {
       { x: PX, y: PY, anchor: 'top-left', opacity: pageIn, id: 'page', attrs: { expect: 'outside-safe: 推近后正文被取景窗裁开; text-overlap: 推近后正文从章节标签和字幕底下经过' } },
       pageNode(C.gold),
     ),
-    pageIn < 1 ? glyphAt(MO_SMALL, { ...MO_AT, fill: C.red }) : null,
+    pageIn < 1 ? placeGlyph(MO_SMALL, MO_AT, { fill: C.red }) : null,
   ]
   return [
     h(

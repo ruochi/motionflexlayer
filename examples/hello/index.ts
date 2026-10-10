@@ -4,15 +4,9 @@
  *   npm run mfl -- render examples/hello/index.ts
  *
  * 结构就是 MOTION.md 里的四步：时间轴 → 帧函数 → 音频 → 验证。
+ * 颜色只从 look.ts 来。那是这支片子的选择；换一支片子，换掉 look.ts，下面的时间和结构照用。
  */
-import {
-  AMBER,
-  BG,
-  CORAL,
-  CYAN,
-  INK,
-  MUTED,
-} from './palette.js'
+import { BG, BLUE, INK, MUTED, RED } from './look.js'
 import {
   box,
   defineComposition,
@@ -21,7 +15,6 @@ import {
   fade,
   font,
   fx,
-  glowDot,
   h,
   place,
   progress,
@@ -62,10 +55,10 @@ const TITLE = 'motion flexlayer'
 const TITLE_AT = 0.4
 const SUB_AT = 1.5
 const CODE: Token[] = [
-  ['spring', CYAN],
-  ['(t - ', INK],
-  ["tl.at('impact')", AMBER],
-  [')', INK],
+  { text: 'spring', style: { color: BLUE } },
+  { text: '(t - ', style: { color: INK } },
+  { text: "tl.at('impact')", style: { color: RED } },
+  { text: ')', style: { color: INK } },
 ]
 const CODE_AT = 5
 const CODE_STEP = 0.045
@@ -81,20 +74,14 @@ const impact = tl.at('impact')
 
 function backdrop(f: Frame) {
   return fx({ width: W, height: H, name: 'backdrop' }, (ctx) => {
-    const k = pulse(f.t, kicks, 7)
-    const g = ctx.createRadialGradient(W / 2, H * 0.46, 0, W / 2, H * 0.46, W * 0.6)
-    g.addColorStop(0, rgba(CORAL, 0.1 + 0.08 * k))
-    g.addColorStop(0.5, rgba(CYAN, 0.04))
-    g.addColorStop(1, rgba(BG, 0))
-    ctx.fillStyle = g
-    ctx.fillRect(0, 0, W, H)
-    // 每个底鼓放出一圈冲击波：半径随时间扩张，透明度随之衰减
+    // 每个底鼓放出一圈冲击波：半径随时间扩张，线宽和透明度随之衰减
     for (const k0 of kicks) {
       const dt = f.t - k0
       if (dt < 0 || dt > 1.2) continue
-      const r = 120 + ease.outCubic(dt / 1.2) * 520
-      ctx.strokeStyle = rgba(k0 === impact ? AMBER : INK, 0.22 * (1 - dt / 1.2))
-      ctx.lineWidth = k0 === impact ? 6 : 2
+      const k = dt / 1.2
+      const r = 120 + ease.outCubic(k) * 620
+      ctx.strokeStyle = rgba(k0 === impact ? BLUE : INK, 0.5 * (1 - k))
+      ctx.lineWidth = (k0 === impact ? 14 : 4) * (1 - 0.6 * k)
       ctx.beginPath()
       ctx.arc(W / 2, H * 0.46, r, 0, Math.PI * 2)
       ctx.stroke()
@@ -102,7 +89,7 @@ function backdrop(f: Frame) {
   })
 }
 
-/** 逐字入场：每个字从下方带旋转弹进来，从中间向两边交错。冲击时整体再弹一下。 */
+/** 逐字入场：每个字从下方带旋转弹进来，从中间向两边交错。冲击时逐字错开地跳一下。 */
 function title(f: Frame) {
   return fx({ width: W, height: H, name: 'title' }, (ctx) => {
     const hit = pulse(f.t, [impact], 5)
@@ -123,13 +110,10 @@ function title(f: Frame) {
           rotate: (1 - e) * 18,
           scale: 1 + hit * 0.06,
           alpha: Math.min(1, local / 0.15) * (1 - out),
-          color: g.ch === 'f' || g.ch === 'l' ? AMBER : INK,
-          glow: 24 * hit,
-          glowColor: AMBER,
+          color: g.ch === 'f' || g.ch === 'l' ? BLUE : INK,
         }
       },
     })
-    glowDot(ctx, W / 2, H * 0.46 - 120, 140, AMBER, 0.25 * hit)
   })
 }
 
@@ -142,7 +126,7 @@ function subtitle(f: Frame) {
       { progress: p, width: 900, height: 60 },
       place(
         { x: 450, y: 30 },
-        text('时间轴 · 节拍 · 弹簧 · 镜头 · 音轨', { fontSize: 34, color: MUTED, letterSpacing: 10 }        ),
+        text('时间轴 · 节拍 · 弹簧 · 镜头 · 音轨', { fontSize: 34, fontWeight: 600, color: MUTED, letterSpacing: 4 }),
       ),
     ),
   )
@@ -153,7 +137,7 @@ function beatCounter(f: Frame) {
   const a = fade(f.t, 1.8, 8.4, 0.4, 0.4)
   const value = springSteps(f.t, kicks, { damping: 14, stiffness: 220 })
   const cells = Array.from({ length: kicks.length + 1 }, (_, i) =>
-    text(String(i).padStart(2, '0'), { fontSize: 64, fontWeight: 700, color: i === 5 ? AMBER : INK }),
+    text(String(i).padStart(2, '0'), { fontSize: 64, fontWeight: 800, color: i === 5 ? RED : INK }),
   )
   // layer 只负责定位，不排版：并排的东西放进 flex 容器
   return place(

@@ -1,17 +1,22 @@
 # 动效配方
 
-每个配方都是能直接用的片段。所有片段都假定已经有了：
+每个配方都是一种手法，不是默认的样子。所有片段都假定已经有了：
 
 - `f`：帧，`f.t` 是当前秒数；
 - `tl`：时间轴；
 - `W`、`H`：画布尺寸；
+- `LOOK`：你这支片子自己的色板和字级（写在 `look.ts`，从需求定）。片段里的 `LOOK.accent`、`LOOK.title` 都指它；
 - 已经从 `motionflexlayer` 导入了用到的函数。
+
+片段里的数值（弹簧参数、间隔、字距、幅度）是能跑通的起点，不是推荐值，按片子的节奏改。发光、颗粒、HUD 这些质感属于某支片子，需求里没有理由就不加。
 
 对照完整示例：
 
 - [examples/hello](../examples/hello/index.ts)：核心写法，10 秒；
 - [examples/hello-react](../examples/hello-react/index.tsx)：React 写法；
 - [examples/showreel](../examples/showreel/index.ts)：48 秒、六段的参考片。
+
+几个示例的样子各不相同，都写在各自的 `look.ts` 里，只属于那支片子。
 
 ## 目录
 
@@ -78,12 +83,12 @@ place({ x, y, opacity: a }, content)   // a 约为 0 时 place 返回 null，整
 ```ts
 const k = pulse(f.t, tl.times('kick'), 7)        // 每个底鼓：1 → 0，衰减系数 7
 fx({ width: W, height: H }, (ctx) => {
-  ctx.fillStyle = rgba('#ff5d73', 0.08 + 0.1 * k)
+  ctx.fillStyle = rgba(LOOK.accent, 0.08 + 0.1 * k)
   ctx.fillRect(0, 0, W, H)
 })
 ```
 
-**冲击三件套：** 闪光、震屏、推镜，三者都由同一个包络驱动。
+**冲击。** 闪光、震屏、推镜可以由同一个包络驱动。用其中几种、多强，由片子的语气定：
 
 ```ts
 const hit = pulse(f.t, tl.times('impact'), 6)
@@ -97,7 +102,10 @@ const cam = shot({
 h('layer', { width: W, height: H, view: cam.view },
   h('layer', cam.stage,
     …scene,
-    fx({ width: W, height: H }, (ctx) => glowDot(ctx, 960, 540, 600, '#ffb547', 0.35 * hit)),
+    fx({ width: W, height: H }, (ctx) => {
+      ctx.fillStyle = rgba(LOOK.flash, 0.3 * hit)
+      ctx.fillRect(0, 0, W, H)
+    }),
   ),
 )
 ```
@@ -116,7 +124,7 @@ for (const c of tl.cues<{ amp: number }>('impact')) if (f.t >= c.t) amp += c.dat
 for (const t0 of tl.times('kick')) {
   const dt = f.t - t0
   if (dt < 0 || dt > 1.2) continue
-  ctx.strokeStyle = rgba('#f4f1ea', 0.25 * (1 - dt / 1.2))
+  ctx.strokeStyle = rgba(LOOK.ink, 0.25 * (1 - dt / 1.2))
   ctx.beginPath()
   ctx.arc(960, 540, 120 + ease.outCubic(dt / 1.2) * 520, 0, Math.PI * 2)
   ctx.stroke()
@@ -125,7 +133,7 @@ for (const t0 of tl.times('kick')) {
 
 ## 文字
 
-**蒙版擦除，叠加字距收紧。** 这是标题入场最常用的组合：
+**蒙版擦除，叠加字距收紧。** 两个动作叠在一起：
 
 ```ts
 const T = tl.at('title')
@@ -134,7 +142,7 @@ place(
   { x: 960, y: 450 },
   reveal(
     { progress: progress(f.t, T, T + 0.9, 'outCubic'), width: 1500, height: 260 },
-    place({ x: 750, y: 130 }, text('Flex Layer', { fontSize: 176, fontWeight: 800, letterSpacing: track, glow: '46 #ffb54755' }, 'h1')),
+    place({ x: 750, y: 130 }, text('标题', { ...LOOK.title, letterSpacing: track }, 'h1')),
   ),
 )
 ```
@@ -146,7 +154,7 @@ place(
 ```ts
 fx({ width: W, height: H }, (ctx) => {
   drawGlyphs(ctx, 'motion flexlayer', {
-    x: 960, y: 560, align: 'center', font: font(150, 800), color: '#f4f1ea', letterSpacing: 2,
+    x: 960, y: 560, align: 'center', font: font(150, 800), color: LOOK.ink, letterSpacing: 2,
     each: (g, n) => {
       const local = f.t - 0.4 - stagger(g.index, n, { each: 0.045, from: 'center' })
       if (local <= 0) return null
@@ -159,10 +167,15 @@ fx({ width: W, height: H }, (ctx) => {
 
 `each` 还可以返回 `color`、`scale`、`glow`、`glowColor`，实现逐字变色或冲击时逐字发光。
 
-**打字机。** 没打出来的字保持透明，用来占位，所以居中排版不会随着打字左右漂移：
+**打字机。** 没打出来的字保持透明，用来占位，所以居中排版不会随着打字左右漂移。每段的 `style` 随便写，占位部分保留字号、字重，只把颜色换成透明：
 
 ```ts
-const CODE: Token[] = [['spring', '#4fd1ff'], ['(t - ', '#f4f1ea'], ["tl.at('impact')", '#ffb547'], [')', '#f4f1ea']]
+const CODE: Token[] = [
+  { text: 'spring', style: { color: LOOK.accent } },
+  { text: '(t - ' },
+  { text: "tl.at('impact')", style: { color: LOOK.second, fontWeight: 700 } },
+  { text: ')' },
+]
 tl.cue('type', Array.from({ length: tokenLength(CODE) }, (_, i) => 5 + i * 0.045))   // 音频在每个字上放 tick
 place({ x: 960, y: 840 }, typewriter(CODE, (f.t - 5) / 0.045 + 1, { fontSize: 36 }))
 ```
@@ -173,6 +186,18 @@ place({ x: 960, y: 840 }, typewriter(CODE, (f.t - 5) / 0.045 + 1, { fontSize: 36
 const typing = f.t < typeEnd
 const on = typing || (f.t * 1.8) % 1 < 0.5
 ```
+
+**一笔一笔写出字形。** flexlayer 的 `glyph()` 把字拆成路径，`placeGlyph` 摆到字身中心，`pathLength` 量出总长，`stroke-dasharray` 按进度露出描边，再淡入填充：
+
+```ts
+const [g] = await glyph('墨', { font: 'Kai', size: 360 })     // 模块顶层
+const len = pathLength(g!.d)
+const dash = len * progress(f.t, T, T + 1.5, 'outQuad')
+const fill = progress(f.t, T + 1, T + 1.7)
+placeGlyph(g!, { x: 960, y: 500 }, { fill: rgba(LOOK.ink, fill), stroke: LOOK.ink, 'stroke-width': 3, 'stroke-dasharray': `${dash} ${len + 10}` })
+```
+
+字形飞行、旋转时，`glyphBounds(g, pose)` 给出着墨在画布上的外接框，用来判断这一帧要不要写 `expect`。
 
 **定格感。** `steps(n)` 把连续的进度变成 n 级台阶，适合手绘、定格动画的感觉：`progress(f.t, 0, 1, steps(8))`。
 
@@ -199,7 +224,7 @@ const cam = shot({ width: W, height: H, x: 1160, y: 575, zoom: z })
 
 如果要让目标点在缩放的同时从原位滑到画面中心，令 `x = 目标 + (中心 - 屏幕位置) / zoom`。showreel 的 `layoutScene` 就是这样写的。
 
-**推向排版算出的一点。** 目标点不必手填：先用 `canvas.create` 量一遍整页，把要看的字包一层 `<span id="here">`，`text[].lines[].chars` 里带这个 `id` 的字就是它，格子中心就是 `shot` 的 `x`、`y`。改了正文、换了栏宽，镜头还是对准那几个字。要在窗外画框标出它，用 `cam.toScreen(x, y)` 换成成片像素，盒子的宽高乘 `cam.zoom`。见 `examples/ink/page.ts`。
+**推向排版算出的一点。** 目标点不必手填：先用 `canvas.create` 量一遍整页，把要看的字包一层 `<span id="here">`，`text[].lines[].chars` 里带这个 `id` 的字就是它，格子中心就是 `shot` 的 `x`、`y`。改了正文、换了栏宽，镜头还是对准那几个字。要在窗外画框标出它，用 `mapBounds(盒子, cam.toScreen)` 换成成片像素的外接框。见 `examples/ink/page.ts`。
 
 **按对数插值缩放。** 从 15 倍拉到 1 倍再推到 5 倍，`zoom` 直接线性插值时，放大的那一头会一闪而过。对 `log(zoom)` 插值，画面里的运动速度才是匀的：
 
@@ -344,12 +369,19 @@ const proj = points.map(([x, y, z]) => {
   const s = 900 / (900 + z2)
   return { x: 960 + x1 * s, y: 540 + y2 * s, s, z: z2 }
 }).sort((a, b) => b.z - a.z)
-for (const p of proj) glowDot(ctx, p.x, p.y, 3 * p.s, '#4fd1ff', clamp(p.s - 0.4))
+for (const p of proj) {
+  ctx.fillStyle = rgba(LOOK.point, clamp(p.s - 0.4))
+  ctx.beginPath()
+  ctx.arc(p.x, p.y, 3 * p.s, 0, TAU)
+  ctx.fill()
+}
 ```
 
 形状之间的过渡（球、环面、三叶结），就是对两组点的坐标做 lerp，用 `spring` 驱动插值系数。
 
 ## 质感：颗粒、暗角、光
+
+这一节的东西都是样子，不是必需品。showreel 用了全套，hello 和 narrated 一样也没用。
 
 **最后一层 post。** 放在返回数组的最后，不放进取景窗：
 
@@ -368,7 +400,18 @@ fx({ width: W, height: H, name: 'post' }, (ctx) => {
 })
 ```
 
-**发光线条。** 用 `strokeGlow(ctx, path, { color, width, glow })`：先画一遍带 `shadowBlur` 的宽线，再画实线。不要用 `lighter` 混合叠很多短线段，那样会出现一串串珠子似的亮点。
+**发光线条。** 同一条路径画两遍：先用宽而淡的笔加 `shadowBlur` 画光晕，再画实线。不要用 `lighter` 混合叠很多短线段，那样会出现一串串珠子似的亮点。框架不带发光的工具函数，showreel 的 `draws.ts` 里是它自己的写法。
+
+```ts
+ctx.save()
+ctx.lineCap = 'round'
+ctx.beginPath(); path(ctx)
+ctx.shadowBlur = 24; ctx.shadowColor = LOOK.glow
+ctx.strokeStyle = rgba(LOOK.glow, 0.5); ctx.lineWidth = w * 2.2; ctx.stroke()
+ctx.shadowBlur = 0
+ctx.strokeStyle = LOOK.glow; ctx.lineWidth = w; ctx.stroke()
+ctx.restore()
+```
 
 **扫光（glint）。** 用一条窄的斜向线性渐变，从左到右扫过标题，持续 0.5 秒左右，同时配一个 sparkle 音效。
 

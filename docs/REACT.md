@@ -28,6 +28,7 @@ npm i react@^19.3 react-reconciler@^0.34
 ```tsx
 import { defineComposition, spring, timeline } from 'motionflexlayer'
 import { Place, Text, fromReact, useFrame } from 'motionflexlayer/react'
+import { LOOK } from './look.js'   // 这支片子自己的色板和字级
 
 const tl = timeline({ bpm: 120, duration: 4 })
 
@@ -36,14 +37,14 @@ function Title() {
   const e = spring(t - 0.3)
   return (
     <Place x={960} y={540 + (1 - e) * 60} opacity={Math.min(1, (t - 0.3) / 0.2)}>
-      <Text as="h1" style={{ fontSize: 120, fontWeight: 800 }}>Hello</Text>
+      <Text as="h1" style={LOOK.title}>Hello</Text>
     </Place>
   )
 }
 
 export default defineComposition({
   id: 'title', width: 1920, height: 1080, fps: 60, duration: 4,
-  background: '#0b0d12', color: '#f2efe8', timeline: tl,
+  background: LOOK.bg, color: LOOK.ink, timeline: tl,
   render: fromReact(<Title />),
 })
 ```

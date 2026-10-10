@@ -1,5 +1,4 @@
 import { createCanvas, DEFAULT_FONT, type Canvas2D } from './canvas.js'
-import { rgba } from './color.js'
 
 /** canvas 字体串。weight 支持可变字重 100..900。 */
 export const font = (size: number, weight = 400, family = DEFAULT_FONT) => `${weight} ${size}px ${family}`
@@ -93,47 +92,6 @@ export function drawGlyphs(ctx: Canvas2D, str: string, opts: DrawGlyphsOptions):
   }
   ctx.restore()
   return glyphs.map((g) => ({ ...g, x: g.x + x0, cx: g.cx + x0 }))
-}
-
-/**
- * 发光描边：同一条路径先用宽而淡的笔加 shadowBlur 画一遍光晕，再画实线。
- * 用 globalCompositeOperation='lighter' 叠很多段会出现串珠状亮点，这个写法没有。
- */
-export function strokeGlow(
-  ctx: Canvas2D,
-  path: (ctx: Canvas2D) => void,
-  opts: { color: string; width: number; glow?: number; alpha?: number; core?: string },
-): void {
-  const alpha = opts.alpha ?? 1
-  if (alpha <= 0.002) return
-  ctx.save()
-  ctx.lineCap = 'round'
-  ctx.lineJoin = 'round'
-  ctx.beginPath()
-  path(ctx)
-  ctx.shadowBlur = opts.glow ?? 24
-  ctx.shadowColor = rgba(opts.color, 0.9 * alpha)
-  ctx.strokeStyle = rgba(opts.color, 0.55 * alpha)
-  ctx.lineWidth = opts.width * 2.2
-  ctx.stroke()
-  ctx.shadowBlur = 0
-  ctx.strokeStyle = rgba(opts.core ?? opts.color, alpha)
-  ctx.lineWidth = opts.width
-  ctx.stroke()
-  ctx.restore()
-}
-
-/** 径向光点。 */
-export function glowDot(ctx: Canvas2D, x: number, y: number, r: number, color: string, alpha = 1): void {
-  if (alpha <= 0.002 || r <= 0) return
-  const g = ctx.createRadialGradient(x, y, 0, x, y, r)
-  g.addColorStop(0, rgba(color, alpha))
-  g.addColorStop(0.35, rgba(color, alpha * 0.35))
-  g.addColorStop(1, rgba(color, 0))
-  ctx.fillStyle = g
-  ctx.beginPath()
-  ctx.arc(x, y, r, 0, Math.PI * 2)
-  ctx.fill()
 }
 
 export type TextPointsOptions = {

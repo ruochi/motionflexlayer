@@ -8,15 +8,18 @@
  * - draws.ts     像素：笔触、几何、粒子、3D 点云、光效，全部在 draw 回调里画
  * - index.ts     结构：哪些层、在哪、什么时候出现，用框架原语搭（本文件）
  * - audio.ts     配乐：示例合成器按 cue 合成
+ * - look.ts      这支片子的色板。深底加琥珀光是它自己的选择，新片子不要沿用
  */
 import {
   clamp,
   defineComposition,
   ease,
+  expects,
   fade,
   fx,
   h,
   lerp,
+  mapBounds,
   noise1,
   place,
   progress,
@@ -36,13 +39,6 @@ import {
 } from 'motionflexlayer'
 import { audio } from './audio.js'
 import {
-  AMBER,
-  BG,
-  CORAL,
-  CYAN,
-  INK,
-  MUTED,
-  VIOLET,
   drawBackdrop,
   drawFlow,
   drawGeometry,
@@ -57,6 +53,7 @@ import {
   drawViz,
   orbitZoom,
 } from './draws.js'
+import { AMBER, BG, CORAL, CYAN, INK, MUTED, VIOLET } from './look.js'
 import { setupParticles } from './particles.js'
 import {
   CARD_TIMES,
@@ -162,21 +159,13 @@ const ORBIT_AT: Vec2 = [960 + 0.5 * (CARD_W + CARD_GAP), CARD_Y - CARD_H / 2 + 2
 /** 卡片落地后的余震：衰减正弦。 */
 const wave = (x: number) => (x <= 0 ? 0 : -Math.exp(-x * 5.5) * Math.sin(x * 11) * 70)
 
-const expectOf = (rules: Array<string | false>) => {
-  const on = rules.filter(Boolean)
-  return on.length ? { expect: on.join('; ') } : undefined
-}
-
 const SAFE = 0.04 * H
 /** 左下角段落名所在的成片像素范围。 */
 const HUD_ROLL = { left: 100, right: 460, top: H - 64 - 17, bottom: H - 64 + 17 }
 
 /** 卡片下半部文字区在屏幕上的外接框：标题到代码行，左右收进 padding。flexlayer 的 outside-safe 只看左右。 */
-function cardTextOnScreen(cx: number, cy: number, cam: Shot) {
-  const [x0, y0] = cam.toScreen(cx - CARD_W / 2 + 24, cy - CARD_H / 2 + 312)
-  const [x1, y1] = cam.toScreen(cx + CARD_W / 2 - 24, cy - CARD_H / 2 + 405)
-  return { left: x0, top: y0, right: x1, bottom: y1 }
-}
+const cardTextOnScreen = (cx: number, cy: number, cam: Shot) =>
+  mapBounds({ left: cx - CARD_W / 2 + 24, top: cy - CARD_H / 2 + 312, right: cx + CARD_W / 2 - 24, bottom: cy - CARD_H / 2 + 405 }, cam.toScreen)
 
 function card(i: number, t: number, cam: Shot) {
   const T = CARD_TIMES[i]!
@@ -199,10 +188,12 @@ function card(i: number, t: number, cam: Shot) {
       rotate: (1 - e) * TILT[i]!,
       origin: 'bottom',
       opacity: clamp((t - T) / 0.12) * (1 - away),
-      attrs: expectOf([
-        outside && 'outside-safe: 落进来和推镜时卡片文字经过画面边缘',
-        overHud && 'text-overlap: 落进来时从左下角的段落名上经过',
-      ]),
+      attrs: {
+        expect: expects(
+          outside && 'outside-safe: 落进来和推镜时卡片文字经过画面边缘',
+          overHud && 'text-overlap: 落进来时从左下角的段落名上经过',
+        ),
+      },
     },
     box(
       {
@@ -269,16 +260,17 @@ function spaceLabel(t: number) {
 
 // ---------------------------------------------------------------- 06 落款
 
+const code = (text: string, color: string): Token => ({ text, style: { color } })
 const CODE_TOKENS: Token[] = [
-  ['<draw>', AMBER],
-  [' ctx', CYAN],
-  ['.fillRect', INK],
-  ['(0, 0, ', MUTED],
-  ['el.w', VIOLET],
-  [', ', MUTED],
-  ['el.h', VIOLET],
-  [')', MUTED],
-  [' </draw>', AMBER],
+  code('<draw>', AMBER),
+  code(' ctx', CYAN),
+  code('.fillRect', INK),
+  code('(0, 0, ', MUTED),
+  code('el.w', VIOLET),
+  code(', ', MUTED),
+  code('el.h', VIOLET),
+  code(')', MUTED),
+  code(' </draw>', AMBER),
 ]
 
 function signScene(t: number): Child[] {

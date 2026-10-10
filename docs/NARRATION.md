@@ -21,7 +21,7 @@ const vo = await narration(
   [
     { id: 'intro', text: '这是一段用代码写出来的短片。', minDuration: 3.2 },
     { id: 'frame', text: '每一帧都是时间的函数。' },
-    { id: 'outro', text: '改一句文案，重新渲染。', data: { accent: '#d9472b' } },
+    { id: 'outro', text: '改一句文案，重新渲染。', data: { mood: 'end' } },
   ],
   { baseDir: import.meta.url, voice: 'zh-CN-XiaoxiaoNeural', rate: '+4%' },
 )
@@ -82,8 +82,10 @@ export default defineComposition({
 - **关键词落点。** 画面的变化放在关键词开口的那一刻：
 
   ```ts
-  const SEPARATE = vo.line('check').words.find((w) => w.text.includes('重叠'))!.from
+  const SEPARATE = vo.at('check', '重叠')        // 第二个“重叠”：vo.at('check', '重叠', 1)
   ```
+
+  找不到这个词就报错。改了文案，动作该跟着改，而不是悄悄落到别处。
 
 - **字幕。** 一份没有样式的逐字时间，画面自己决定怎么画。见下一节。
 - **逐词出现。** `line.words.filter((w) => w.from <= f.t)` 就是已经念出来的词，配 `spring(f.t - w.from)` 逐个弹出。
@@ -99,14 +101,24 @@ export default defineComposition({
   render: (f) => {
     const now = f.subtitle          // 没有旁白的合成里是 undefined
     if (!now) return []
-    // now.chars[i].progress 是这个字自己的 0..1
-    // now.chars[i].word 是它在 now.line.words 里的序号
+    // now.words[i].progress、now.chars[i].progress 是这个词、这个字自己的 0..1
+    // now.chars[i].word 是它在 now.words 里的序号
     // 词尾的标点不占时长：from === to，等于这个词的结束
   },
 })
 ```
 
-词的时长均分给词里的字。想整词一起亮，看 `line.words[ch.word].from`；想逐字出来，用 `ch.progress` 或 `ch.from`。
+词的时长均分给词里的字。想整词一起变，用 `wordProgress(now, ch)`（字所在那个词的进度）；想逐字出来，用 `ch.progress`。
+
+每个字的样子由帧函数决定，`runs` 把相邻、样子相同的字并成一段，排版只多几个 span。下面是 narrated 的写法，三种颜色是它自己的选择：
+
+```ts
+const spans = runs(now.chars, (ch) => {
+  const p = wordProgress(now, ch)
+  return p >= 1 ? LOOK.said : p > 0 ? LOOK.now : LOOK.next
+})
+h('p', { style: LOOK.subtitle }, ...spans.map((s) => h('span', { style: `color:${s.key}` }, s.text)))
+```
 
 逐字绘制不必走 HTML 的 `style`。`chars` 的序号和 `drawGlyphs` 的字形序号一致：
 
@@ -115,7 +127,7 @@ render: (f) => fx({ width: 1920, height: 1080 }, (ctx) => {
   const now = f.subtitle
   if (!now) return
   drawGlyphs(ctx, now.line.text, {
-    x: 960, y: 1000, font: font(44), color: '#efe7d6', align: 'center',
+    x: 960, y: 1000, font: font(44), color: LOOK.ink, align: 'center',
     each: (g) => ({ alpha: 0.35 + 0.65 * now.chars[g.index]!.progress, dy: (1 - now.chars[g.index]!.progress) * 12 }),
   })
 })

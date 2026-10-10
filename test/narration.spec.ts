@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { encodeWav } from '../src/audio/wav.js'
 import { defineComposition, frameAt } from '../src/composition.js'
-import { alignWords, narration, subtitleChars, toVtt } from '../src/voice/narration.js'
+import { alignWords, narration, subtitleChars, toVtt, wordProgress } from '../src/voice/narration.js'
 import type { TtsEngine } from '../src/voice/tts.js'
 
 /** 假引擎：每个非标点字念 0.2 秒，写一段静音 WAV。 */
@@ -86,6 +86,17 @@ describe('narration', () => {
     const comp = defineComposition({ width: 100, height: 100, duration: vo.duration, subtitles: vo.subtitles, render: () => null })
     expect(frameAt(comp, 0.75).subtitle!.chars[1]!.progress).toBeCloseTo(0.25)
     expect(frameAt(comp, 0.75).subtitle!.chars[1]).not.toHaveProperty('color')
+  })
+
+  it('按词取开口时刻；字幕读数带每个词的进度', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mfl-vo-'))
+    const vo = await narration([{ id: 'a', text: '一二三。' }], { baseDir: dir, engine: fakeEngine(), lead: 0.5 })
+    expect(vo.at('a', '二')).toBe(0.7)
+    expect(vo.word('a', '三').to).toBeCloseTo(1.1, 3)
+    expect(() => vo.at('a', '九')).toThrow(/九/)
+    const now = vo.subtitle(0.75)!
+    expect(now.words.map((w) => w.progress)).toEqual([1, expect.closeTo(0.25), 0])
+    expect(now.chars.map((c) => wordProgress(now, c))).toEqual([1, expect.closeTo(0.25), 0, 0])
   })
 
   it('引号算在相邻的词上：前引号跟后一个词开始，后引号跟前一个词结束', () => {

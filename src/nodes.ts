@@ -1,4 +1,4 @@
-import { h, type DrawFn, type FvgChild, type FvgNode } from 'flexlayer'
+import { h, type DrawFn, type FvgChild, type FvgNode, type Glyph } from 'flexlayer'
 import { clamp, r2 } from './math.js'
 
 export { h }
@@ -91,6 +91,41 @@ export function place(opts: PlaceOptions, ...children: Child[]): FvgNode | null 
       ...opts.attrs,
     },
     ...children,
+  )
+}
+
+export type GlyphPose = {
+  /** 字身盒子中心。 */
+  x: number
+  y: number
+  scale?: number
+  /** 度，绕字身中心。 */
+  rotate?: number
+  opacity?: number
+}
+
+/**
+ * 把 flexlayer `glyph()` 拆出的一个字形摆到 (x, y)，旋转、缩放都绕字身中心。
+ * `attrs` 原样写到 path 上：fill、stroke、stroke-dasharray……框架不给默认颜色。
+ * 着墨的外接框用 `glyphBounds(g, pose)`。
+ */
+export function placeGlyph(g: Glyph, p: GlyphPose, attrs: Record<string, string | number | undefined> = {}): FvgNode | null {
+  const o = p.opacity ?? 1
+  if (o <= 0.002 || !g.d) return null
+  const s = p.scale ?? 1
+  return h(
+    'layer',
+    {
+      x: r2(p.x),
+      y: r2(p.y),
+      anchor: 'center',
+      width: r2(g.width),
+      height: r2(g.height),
+      rotate: p.rotate ? r2(p.rotate) : undefined,
+      scale: s !== 1 ? Math.round(s * 10000) / 10000 : undefined,
+      opacity: o < 1 ? Math.round(o * 1000) / 1000 : undefined,
+    },
+    h('path', { d: g.d, stroke: 'none', ...attrs }),
   )
 }
 
@@ -303,23 +338,37 @@ export function reveal(opts: RevealOptions, ...children: Child[]): FvgNode | nul
   return h('layer', { width: W, height: H }, h('mask', {}, h('rect', rect)), ...children)
 }
 
-export type Token = string | [text: string, color: string]
+/** 打字机的一段。`style` 是这段 span 的任意样式，框架不预设任何颜色。 */
+export type Token = string | { text: string; style?: StyleObject | string; id?: string }
+
+const tokenText = (tk: Token) => (typeof tk === 'string' ? tk : tk.text)
+
+/** 去掉 color，保留影响宽度的样式，给占位的透明部分用。 */
+function withoutColor(style: StyleObject | string | undefined): string | undefined {
+  if (style == null) return undefined
+  if (typeof style === 'string') return style.replace(/(^|;)\s*color\s*:[^;]*/g, '$1').replace(/^[;\s]+|[;\s]+$/g, '') || undefined
+  const { color: _, ...rest } = style
+  return css(rest) || undefined
+}
 
 /**
  * 打字机：显示前 shown 个字符。没打出来的部分保留为透明文字占位，
- * 整行宽度从第一帧就固定，居中排版不会随打字左右漂。
+ * 整行宽度从第一帧就固定，居中排版不会随打字左右漂。占位部分保留每段的样式（字号、字重等），只把颜色换成透明。
  */
 export function typewriter(tokens: string | Token[], shown: number, style?: StyleObject | string): FvgNode {
-  const list: Array<[string, string | undefined]> = (typeof tokens === 'string' ? [tokens] : tokens).map((tk) =>
-    typeof tk === 'string' ? [tk, undefined] : tk,
-  )
+  const list = typeof tokens === 'string' ? [tokens] : tokens
   let left = Math.max(0, Math.floor(shown))
   const spans: FvgNode[] = []
-  for (const [tok, color] of list) {
-    const vis = Math.max(0, Math.min(tok.length, left))
+  for (const tk of list) {
+    const str = tokenText(tk)
+    const own = typeof tk === 'string' ? undefined : tk
+    const vis = Math.max(0, Math.min(str.length, left))
     left -= vis
-    if (vis > 0) spans.push(h('span', { style: color ? `color:${color}` : undefined }, tok.slice(0, vis)))
-    if (vis < tok.length) spans.push(h('span', { style: 'color:rgba(0,0,0,0)' }, tok.slice(vis)))
+    if (vis > 0) spans.push(h('span', { id: own?.id, style: css(own?.style) }, str.slice(0, vis)))
+    if (vis < str.length) {
+      const keep = withoutColor(own?.style)
+      spans.push(h('span', { style: keep ? `${keep}; color:rgba(0,0,0,0)` : 'color:rgba(0,0,0,0)' }, str.slice(vis)))
+    }
   }
   const s = css(style)
   return h('p', { style: s ? `white-space:nowrap; ${s}` : 'white-space:nowrap' }, ...spans)
@@ -327,5 +376,5 @@ export function typewriter(tokens: string | Token[], shown: number, style?: Styl
 
 /** 按 token 拼起来的总字符数。 */
 export function tokenLength(tokens: Token[]): number {
-  return tokens.reduce((n, tk) => n + (typeof tk === 'string' ? tk.length : tk[0].length), 0)
+  return tokens.reduce((n, tk) => n + tokenText(tk).length, 0)
 }

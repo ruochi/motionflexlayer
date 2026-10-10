@@ -9,8 +9,31 @@
  * 每个字的位置都只由 t 算出：先求它在各个版面里的格子，再按时间在这些格子之间插值。
  */
 import { canvas, glyph, h, type Glyph, type PlacedLine } from 'flexlayer'
-import { clamp, fade, fx, hash, lerp, mixColor, place, progress, pulse, rgba, spring, text, tween, wiggle, type Child, type Frame } from 'motionflexlayer'
-import { at, C, glyphAt, glyphInk, H, L, LATIN, offCanvas, pathLength, roomTo, seal, sheet, W } from './kit.js'
+import {
+  clamp,
+  edgeRoom,
+  fade,
+  fx,
+  glyphBounds,
+  hash,
+  lerp,
+  mixColor,
+  pathLength,
+  place,
+  placeGlyph,
+  progress,
+  pulse,
+  rgba,
+  spring,
+  text,
+  tween,
+  unionBounds,
+  wiggle,
+  type Child,
+  type Frame,
+} from 'motionflexlayer'
+import { at, H, L, offCanvas, seal, sheet, W } from './kit.js'
+import { C, LATIN } from './look.js'
 
 export const P = '先排版，再拆字。每个字都知道自己落在哪一行、哪一格。笔画着墨之处，就是它该在的地方。'
 const CHARS = [...P]
@@ -18,6 +41,7 @@ const SIZE = 64
 const SHAPES = await glyph(P, { font: 'Kai', size: SIZE, weight: 700 })
 const TITLE = await glyph('着墨', { font: 'Brush', size: 360 })
 const TITLE_LEN = TITLE.map((g) => pathLength(g.d))
+const PAPER = { fill: C.paper }
 /** 竖排时要从字身左下挪到格子右上的句读。 */
 const PUNCT = '，。、；：？！'
 
@@ -181,10 +205,15 @@ function titleChar(i: number, t: number): Child[] {
   const y = TITLE_Y + wiggle(t, 26, 7 * hit, i + 5)
   if (t >= T_TITLE_FLY) return []
   return [
-    glyphAt(
+    placeGlyph(
       g,
-      { x, y, fill: rgba(C.paper, fill) },
-      { stroke: rgba(C.paper, 1 - 0.9 * fill), 'stroke-width': 3, 'stroke-dasharray': `${dash.toFixed(1)} ${(TITLE_LEN[i]! + 10).toFixed(0)}` },
+      { x, y },
+      {
+        fill: rgba(C.paper, fill),
+        stroke: rgba(C.paper, 1 - 0.9 * fill),
+        'stroke-width': 3,
+        'stroke-dasharray': `${dash.toFixed(1)} ${(TITLE_LEN[i]! + 10).toFixed(0)}`,
+      },
     ),
   ]
 }
@@ -200,8 +229,8 @@ function titleFlight(n: number, t: number): Child[] {
   const q = progress(k, 0.35, 0.75)
   const rotate = (n ? 10 : -10) * Math.sin(Math.PI * k)
   return [
-    glyphAt(TITLE[n]!, { ...p, scale: size / 360, rotate, opacity: 1 - q }),
-    glyphAt(SHAPES[i]!, { ...p, scale: size / SIZE, rotate, opacity: q }),
+    placeGlyph(TITLE[n]!, { ...p, scale: size / 360, rotate, opacity: 1 - q }, PAPER),
+    placeGlyph(SHAPES[i]!, { ...p, scale: size / SIZE, rotate, opacity: q }, PAPER),
   ]
 }
 
@@ -338,19 +367,14 @@ function sticker(f: Frame): Child[] {
   const bump = pulse(t, [T_POP], 7, 0.05)
   const lift = progress(t, T_POP, T_POP + 0.4, 'outCubic')
   const flooding = t > T_FLOOD - 0.05
-  const stickInk = STICK_IDX.map((i, n) => glyphInk(SHAPES[i]!, stickerPose(n, t))).reduce((a, b) => ({
-    left: Math.min(a.left, b.left),
-    top: Math.min(a.top, b.top),
-    right: Math.max(a.right, b.right),
-    bottom: Math.max(a.bottom, b.bottom),
-  }))
+  const stickInk = unionBounds(...STICK_IDX.map((i, n) => glyphBounds(SHAPES[i]!, stickerPose(n, t))))
   const fall: Child[] = []
   let out = false
   CHARS.forEach((_, i) => {
     if (STICK_IDX.includes(i)) return
     const p = fallPose(i, t)
     if (!p) return
-    fall.push(glyphAt(SHAPES[i]!, p))
+    fall.push(placeGlyph(SHAPES[i]!, p, PAPER))
     out ||= offCanvas(p)
   })
   return [
@@ -363,9 +387,9 @@ function sticker(f: Frame): Child[] {
         scale: bump > 0.001 ? 1 + 0.08 * bump : undefined,
         origin: `${W / 2} ${CY}`,
         opacity: 1 - progress(t, L.glass.from + 0.2, L.glass.from + 0.6),
-        expect: w2 > roomTo(stickInk) ? 'effect-clipped: 描边漫出画面做转场' : undefined,
+        expect: w2 > edgeRoom(stickInk, W, H) ? 'effect-clipped: 描边漫出画面做转场' : undefined,
       },
-      ...STICK_IDX.map((i, n) => glyphAt(SHAPES[i]!, { ...stickerPose(n, t), fill })),
+      ...STICK_IDX.map((i, n) => placeGlyph(SHAPES[i]!, stickerPose(n, t), { fill })),
     ),
   ]
 }
@@ -383,7 +407,7 @@ function paragraph(f: Frame): Child {
     else if (n < 0 && t < rainStart(i)) return
     else {
       const p = paragraphPose(i, t)
-      out.push(glyphAt(SHAPES[i]!, p))
+      out.push(placeGlyph(SHAPES[i]!, p, PAPER))
       off ||= offCanvas(p)
     }
   })

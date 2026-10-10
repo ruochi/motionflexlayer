@@ -7,8 +7,9 @@
  *         字跳起来时影子和字分开。最后字转回正面、缩回平面，停在画面正中，交给下一段的镜头。
  */
 import { canvas, glyph, h } from 'flexlayer'
-import { fade, keyframes, lerp, place, progress, spring, text, type Child, type Frame } from 'motionflexlayer'
-import { at, C, H, L, LATIN, poseBounds, sheet, W } from './kit.js'
+import { expects, fade, keyframes, lerp, place, poseBounds, progress, spring, text, type Child, type Frame } from 'motionflexlayer'
+import { at, H, L, sheet, W } from './kit.js'
+import { C, LATIN } from './look.js'
 
 // ---------------------------------------------------------------- 玻璃
 
@@ -85,12 +86,12 @@ function glassText(t: number): Child {
   const y = lerp(1500, H / 2 - 10, k) + 12 * Math.sin(float * 1.6)
   const rotate = 2.2 * Math.sin(float * 1.1)
   const ink = poseBounds(GLASS_INK, { x: W / 2, y, rotate })
-  const rules = [
+  const expect = expects(
     ink.bottom > H && 'overflow-canvas: 从画面下方升上来',
     ink.bottom <= H && ink.bottom + GLASS_SHADOW > H && 'effect-clipped: 升上来时阴影还在画面下沿外',
     y > H - 300 && 'text-overlap: 升上来时经过字幕',
-  ].filter(Boolean)
-  return place({ x: W / 2, y, rotate, id: 'glass-text', attrs: rules.length ? { expect: rules.join('; ') } : undefined }, GLASS_TEXT)
+  )
+  return place({ x: W / 2, y, rotate, id: 'glass-text', attrs: expect ? { expect } : undefined }, GLASS_TEXT)
 }
 
 function glassScene(f: Frame): Child[] {
