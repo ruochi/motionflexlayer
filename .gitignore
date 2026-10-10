@@ -3,5 +3,3 @@ dist
 out
 *.log
 .DS_Store
-# npm run assets 生成
-examples/assets/*.wav

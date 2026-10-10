@@ -4,7 +4,7 @@
 
 motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做法。改完一项，motionflexlayer 删一段绕路代码。
 
-**状态核对于 flexlayer 0.2.30（db6ef3b）。** 第 1、4、5、8、15、16 项已完成，motionflexlayer 已删掉对应的绕路代码；第 17 项部分完成。第 4 项没有按下面的 `bleed` / `profile` 方案做，而是换成了更好的 `view` 取景：取景窗裁掉的不报 `overflow-canvas`，最小字号按屏幕上的大小和短边算。另外 flexlayer 新增的 `expect`、`data`、行内元素进报告、`flex-wrap`、`anchor-box="ink"`、`glyph()`、`canvas.create()` 的逐字位置和 `elements`、`ink-stroke`、`glass`、`extrude` 都已在示例里用上（`examples/ink`）。
+**状态核对于 flexlayer 0.2.40（455f68f）。** 0.2.31 到 0.2.40 增加了 Material Symbols、网格材质、文字渐变、`analyzeImage`、蒙版运算，motionflexlayer 还没用到。下面未完成的项在 0.2.40 里仍然开着。 第 1、4、5、8、15、16 项已完成，motionflexlayer 已删掉对应的绕路代码；第 17 项部分完成。第 4 项没有按下面的 `bleed` / `profile` 方案做，而是换成了更好的 `view` 取景：取景窗裁掉的不报 `overflow-canvas`，最小字号按屏幕上的大小和短边算。另外 flexlayer 新增的 `expect`、`data`、行内元素进报告、`flex-wrap`、`anchor-box="ink"`、`glyph()`、`canvas.create()` 的逐字位置和 `elements`、`ink-stroke`、`glass`、`extrude` 都已在示例里用上（`examples/ink`）。
 
 | # | 优先级 | 改动 | 状态 | motionflexlayer 里受影响的代码 |
 | --- | --- | --- | --- | --- |
@@ -25,7 +25,7 @@ motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做
 | 15 | P0 | 中文折行：句读落到行首 | ✅ 已完成 | `headsOk` 已删除 |
 | 16 | P1 | 合并子树墨迹时进 `g` | ✅ 已完成 | 无（`glyphAt` 每字一层 layer 只为绕字身中心转） |
 | 17 | P2 | `canvas.create` 的字带上原文位置；竖排按列给 | 部分：字带上所在 span 的 `id` | `examples/ink/page.ts` 的 `cells()` 已改成按 id 取；`type.ts` 竖排仍按 `x` 分列 |
-| 18 | P2 | 被取景窗裁开的文字和 `outside-safe` | 新增 | `examples/ink/page.ts`、`showreel` 卡片上的 `expect` |
+| 18 | P2 | 被取景窗裁开的文字和 `outside-safe` | 新增 | `examples/ink/page.ts` 按帧写 `expect` |
 
 ---
 
@@ -89,7 +89,7 @@ flexlayer 没有按这里原先提的 `bleed` / `profile: 'video'` 做，而是�
 - 最小字号拿屏幕上的字号（`font-size × screenScale`）和 `min(宽, 高) / 1080 × 24` 比，1080p 横屏、竖屏都是 24px；
 - 阴影、光晕的外扩也按屏幕算；`bleed` 已删除。
 
-**motionflexlayer 改完了。** `camera()` 换成纯函数 `shot()`，算出 `view`、舞台层属性和 `toScreen`，结构由用户写两层 layer。hello、hello-react、showreel、ink 都去掉了 `lint.ignore`，逐帧检查没有 warn 以上的问题。
+**motionflexlayer 改完了。** `camera()` 换成纯函数 `shot()`，算出 `view`、舞台层属性和 `toScreen`，结构由用户写两层 layer。着墨去掉了 `lint.ignore`，逐帧检查没有 warn 以上的问题。
 
 ## 5. `origin` 支持任意点（P1，✅ 已完成）
 
@@ -134,7 +134,7 @@ motionflexlayer 的 `place()` 的 `origin` 接受 `'120 80'` 或 `[x, y]`。`sho
 <h1 split="chars">motion</h1>   <!-- 等价于每个字一个 span，按 span[0..n] 编号 -->
 ```
 
-**motionflexlayer 改完后。** 新增 `splitText(str, (i, n) => style)` 生成带变换的 span；hello 示例的标题从 `drawGlyphs` 改成 HTML 文字，就能直接用 `glow`。`drawGlyphs` 保留，给 `draw` 里的场景用。
+**motionflexlayer 改完后。** 新增 `splitText(str, (i, n) => style)` 生成带变换的 span。逐字标题就可以从 `drawGlyphs` 改成 HTML 文字，直接用 `glow`。`drawGlyphs` 保留，给 `draw` 里的场景用。
 
 **验收。** 带 `translate` 的 span 和不带时排版结果（`lines[].box`）一致；渲染出的字形整体平移了指定的距离。
 
@@ -231,7 +231,7 @@ flexlayer 改用 `linebreak` 断行，并避开行首标点。ink 示例那段�
 - 推近一整页正文时，被取景窗左右边缘裁开的段落每帧都报 `outside-safe`。`overflow-canvas` 对取景窗裁掉的部分已经不报，`outside-safe` 却照报，两条规则口径不一致；
 - `outside-safe` 只比较左右，不比较上下；SPEC 的问题码表里没写这一点，示例里按屏幕位置写 `expect` 时踩过。
 
-**motionflexlayer 现在的做法。** ink 的页面、showreel 的卡片上按帧写 `expect: 'outside-safe: …'`；showreel 用 `shot().toScreen` 算卡片文字在屏幕上的位置，只在真越界的帧写。
+**motionflexlayer 现在的做法。** 着墨的页面按帧写 `expect: 'outside-safe: …'`。要判断某一帧该不该写，用 `mapBounds(框, cam.toScreen)` 算出文字在屏幕上的外接框。
 
 **建议。** 二选一并写进 SPEC：
 

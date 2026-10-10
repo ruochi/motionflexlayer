@@ -155,15 +155,15 @@ const tone: AudioSource = {
 }
 ```
 
-[examples/synth](../examples/synth/index.ts) 是一个完整的合成器套件，showreel 的整首配乐就是用它写出来的，作为一个音源放进 visualtone 混音。它只是示例；新片子优先用 visualtone 的原生音轨或真实的音频文件。
+新片子优先用 visualtone 的原生音轨或真实的音频文件。着墨的配乐写在 `examples/ink/sound.ts`，是 visualtone 音轨，和弦按旁白的段落换。
 
 ## 看不到声音时怎么检查
 
 ```bash
-npm run mfl -- audio examples/narrated/index.ts
+npm run mfl -- audio examples/ink/index.ts
 ```
 
-输出 `out/narrated/narrated.wav`、`narrated.score.json`（交给 visualtone 的乐谱）、`narrated.waveform.png`，并在终端打印报告：
+输出 `out/ink/ink.wav`、`ink.score.json`（交给 visualtone 的乐谱）、`ink.waveform.png`，并在终端打印报告。下面这组数字是报告长什么样，不是着墨的实测：
 
 ```
 音频 32.59s  响度 -16.0 LUFS  峰值 -1.6 dBFS  RMS -19.2 dBFS  限幅 1.6 dB

@@ -36,13 +36,12 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "mfl": "tsx src/cli.ts",
-    "assets": "tsx examples/assets/make-assets.ts",
     "voice": "tsx src/cli.ts voice"
   },
   "license": "MIT",
   "dependencies": {
-    "flexlayer": "github:ruochi/flexlayer#db6ef3bd90255f0bd3bf03ddcc4a555322e1f4d3",
-    "visualtone": "github:ruochi/visualtone#45751eab2e29fe90a2c2e7a9c7986cc6803ad0e4",
+    "flexlayer": "github:ruochi/flexlayer#455f68f7a40280e139d56a4c5bc3a1e16caa23db",
+    "visualtone": "github:ruochi/visualtone#4cf61494d9313cdb4a32f002f305e1ca855b8b15",
     "tsx": "^4.19.2"
   },
   "peerDependencies": {

@@ -1,6 +1,6 @@
 # React 写法
 
-用 React 组件写帧函数。适合由很多小块组成、需要复用和组合的画面：数据可视化、UI 演示、字幕条、片头模板。完整示例见 [examples/hello-react](../examples/hello-react/index.tsx)。
+用 React 组件写帧函数。适合由很多小块组成、需要复用和组合的画面：数据可视化、UI 演示、字幕条、片头模板。仓库里的片子 `examples/ink` 用的是核心写法；React 写法看下面的最小例子。
 
 React 写法和核心写法得到的是同一种东西：一棵 flexlayer 节点树。两种写法可以混用。
 

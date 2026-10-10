@@ -10,7 +10,7 @@
 段落、cue、字幕、旁白片段
 ```
 
-完整示例见 [examples/narrated](../examples/narrated/index.ts)。
+完整片子见 [examples/ink](../examples/ink/index.ts)。夜色、楷书和印章是那支片子的样子，时间轴、字幕和配乐跟着旁白走才是要看的机制。
 
 ## 写法
 
@@ -110,7 +110,7 @@ export default defineComposition({
 
 词的时长均分给词里的字。想整词一起变，用 `wordProgress(now, ch)`（字所在那个词的进度）；想逐字出来，用 `ch.progress`。
 
-每个字的样子由帧函数决定，`runs` 把相邻、样子相同的字并成一段，排版只多几个 span。下面是 narrated 的写法，三种颜色是它自己的选择：
+每个字的样子由帧函数决定，`runs` 把相邻、样子相同的字并成一段，排版只多几个 span。三种颜色写在片子自己的 `LOOK` 里：
 
 ```ts
 const spans = runs(now.chars, (ch) => {
@@ -136,9 +136,9 @@ render: (f) => fx({ width: 1920, height: 1080 }, (ctx) => {
 导出给别的渲染器（播放器、剪辑软件）时也不带样式：
 
 ```bash
-npm run mfl -- subs examples/narrated/index.ts
-# out/narrated/narrated.vtt        一句一条的 WebVTT，没有 STYLE
-# out/narrated/narrated.subs.json  逐字时间
+npm run mfl -- subs examples/ink/index.ts
+# out/ink/ink.vtt        一句一条的 WebVTT，没有 STYLE
+# out/ink/ink.subs.json  逐字时间
 ```
 
 `render` 和 `subs` 都写到输出目录，默认 `out/<id>/`。
