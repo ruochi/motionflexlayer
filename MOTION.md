@@ -29,14 +29,38 @@
 - **没有旁白时，音乐决定时长。** 先定 BPM，段落落在小节线上。
 - 两者都有时，段落仍按旁白排；音乐的和弦或乐句按段落起止编排，见 `examples/narrated`。
 
-### 别让每支片子都一个样
+### 框架只给数据和机制，样子由片子定
 
-框架不带任何视觉风格。示例只是演示写法，不是模板。每支片子的风格从需求里来：
+框架里没有默认色板、默认字体、默认字幕组件，也没有光效和 HUD。它只给这几类东西：
 
-- **先定三件事再写代码：** 色板（3–5 个颜色，写成常量）、字体与字重层级、运动语汇（干脆利落的硬切，还是柔和的弹簧，还是缓慢的推移）。三件事都要能用需求里的一句话解释。
-- **不要照搬示例的配色和版式。** 深底加青橙光效是 showreel 的风格，米色纸面加红色强调是 narrated 的风格。新片子要换掉。
+| 框架给 | 例子 |
+| --- | --- |
+| 时间 | 时间轴、段落、cue；旁白的逐词、逐字时间（`vo.at`、`f.subtitle`）；音频包络（`f.audio`） |
+| 几何 | `shot` 和 `toScreen`；`poseBounds`、`glyphBounds`、`mapBounds`、`edgeRoom`；`pathLength` |
+| 结构 | `place`、`box`、`text`、`roll`、`reveal`、`typewriter`、`placeGlyph`；`runs` 把逐字的决定并成几段 |
+| 检查 | 排版报告、`expects()` 按这一帧的几何开关预期 |
+
+颜色、字体、字号、版式位置、发光、颗粒、暗角、HUD、章节标签、进度点、字幕长什么样、转场套路，全部由片子自己写。字幕就是这样：框架只出逐字时间，整词变色、逐字弹出、画成字形还是只导出 `.vtt`，都由帧函数决定。
+
+**每支片子把样子写在一处。** 示例都放在 `look.ts`（或入口顶上的一块），文件头写明“这是这支片子的选择，不是框架默认”。画面代码只从这里取颜色和字体，换掉这一处，时间和结构照用。
+
+示例之间故意长得不一样，各自演示不同的机制：
+
+| 示例 | 它的样子（只属于它） | 拿它学什么 |
+| --- | --- | --- |
+| hello | 明黄底、近黑粗字、蓝红两个点色，没有光效 | 节拍时间轴、逐字弹簧、蒙版擦除、计数器、打字机、震屏 |
+| hello-react | 白底报表、青绿柱子、橙色收尾 | React 写法、`<Sequence>`、柱子随 cue 长出 |
+| showreel | 深底、琥珀和青色的光、颗粒暗角、四角 HUD | `draw` 回调、粒子模拟、3D 点云、推镜进卡片 |
+| narrated | 米色纸面、墨色字、朱红强调 | 旁白排时间轴、字幕、电平和波形、排版检查 |
+| ink | 夜色底、楷书和书法字、朱红印章 | 字形、排版测量、`ink-stroke`、`glass`、`extrude`、推向排版算出的一点 |
+
+照着示例写时，拿走机制，不拿样子：
+
+- **先定三件事再写代码：** 色板（3–5 个颜色）、字体与字级、运动语汇（硬切、弹簧还是缓慢推移）。三件事都要能用需求里的一句话解释，写进自己的 `look.ts`。
+- **写完对照一下：** 自己的 `look.ts` 和哪个示例的相近，就是照搬了，换掉。HUD、章节标签、进度点、底部字幕、颗粒暗角都不是视频的必需品，需求里没有理由就不加。
+- **数值也是样子：** 弹簧参数、错开间隔、字距、震屏幅度在示例和配方里只是起点，按片子的节奏重新定。
 - **转场方式跟着内容变：** 列举用逐项入场，对比用分屏，因果用连线或推镜，数字用滚动计数。全片只用一种淡入淡出，就会显得单调。
-- **声音也一样：** 和弦进行、音色（`hue`、`engine`）、音效选择都按语气定。轻松的片子用 `pluck` / `marimba` 和 `pop`，严肃的用 `wavetable` 铺底和 `swell`。
+- **声音也一样：** 和弦进行、音色（`hue`、`engine`）、音效都按需求里的语气定。示例的配乐同样只属于示例。
 
 ## 1. 心智模型
 
@@ -83,7 +107,8 @@
 | `draw` 里不分配大对象 | 每帧 `createCanvas(1920, 1080)` | 在模块顶层或 `setup` 里建好，复用 | 内存上涨，越来越慢 |
 | 看不见的元素就不输出 | 透明度为 0 的层仍然放进文档 | `place()` 在透明度约为 0 时返回 `null`；条件渲染写 `cond && node` | 白白排版、绘制 |
 | React 里每帧都是新挂载 | 用 `useState` / `useEffect` 存动画状态 | 只用 `useFrame()` 和纯计算，`useMemo` 只做帧内去重 | 状态每帧丢失 |
-| 预期中的问题写 `expect` | 整个合成 `lint.ignore: ['text-overlap']` | 在那个元素上写 `attrs: { expect: 'text-overlap: 交叉淡化' }` | 真正的 bug 被一起忽略 |
+| 预期中的问题写 `expect` | 整个合成 `lint.ignore: ['text-overlap']` | 在那个元素上写 `attrs: { expect: expects(overlap && 'text-overlap: 交叉淡化') }`，条件按这一帧的几何算 | 真正的 bug 被一起忽略 |
+| 样子写在片子里的一处 | 把示例的色板、HUD、字幕样式拷进新片；在帧函数各处散写颜色 | 新片子写自己的 `look.ts`，从示例和配方只拿机制 | 每支片子都长一个样；换风格要改遍全片 |
 | 音量看报告，不靠猜 | 直接把增益都设成 0 dB | 跑 `audio` 命令：响度 -16 LUFS 左右，有旁白时“旁白高出音乐”≥ 6 dB，没有 ⚠ | 削波、旁白听不清，或者全片一样响 |
 | 旁白文字和字幕是同一份 | 字幕另写一遍，或在字幕数据里写颜色、字号 | 合成带 `subtitles: vo.subtitles`，画面读 `f.subtitle`，颜色和位置写在帧函数里 | 改了文案，字幕和声音对不上；换一种字幕样子就要改时间数据 |
 
@@ -129,10 +154,11 @@ tl.cue('kick', tl.beats(16, 40))          // 第 16 到 39 拍，每拍一个底
 
 ```ts
 import { defineComposition, h, shot, place, text, fx, progress, spring, pulse, wiggle } from 'motionflexlayer'
+import { LOOK } from './look.js'      // 这支片子自己的色板和字级，从需求定
 
 export default defineComposition({
   width: 1920, height: 1080, fps: 60, duration: 24,
-  background: '#07080d', color: '#f4f1ea',
+  background: LOOK.bg, color: LOOK.ink,
   timeline: tl,
   setup: async () => { /* 预计算 */ },
   render: (f) => {
@@ -144,7 +170,7 @@ export default defineComposition({
         h('layer', cam.stage,
           fx({ width: 1920, height: 1080 }, (ctx) => { /* 背景、粒子 */ }),
           place({ x: 960, y: 540 - (1 - spring(f.t - tl.at('title'))) * 80, opacity: progress(f.t, 2, 2.3) },
-            text('标题', { fontSize: 120, fontWeight: 800 })),
+            text('标题', LOOK.title)),
         ),
       ),
       // HUD 写在取景窗外，用成片像素，不跟着震
@@ -160,8 +186,9 @@ export default defineComposition({
 字幕是逐字时间，没有样式。合成上写 `subtitles: vo.subtitles`，帧函数读 `f.subtitle`：
 
 ```ts
-const now = f.subtitle          // { line, chars }，每个字有 text、from、to、progress
-// 整词一起变色、逐字弹出、画成字形，都从 chars 来。颜色和位置不在这份数据里。
+const now = f.subtitle          // { line, words, chars }，每个词、每个字都有 text、from、to、progress
+// 每个字的样子由这一帧决定，runs 把相邻、样子相同的字并成一段。颜色和位置不在这份数据里。
+const spans = runs(now.chars, (ch) => (wordProgress(now, ch) > 0 ? LOOK.said : LOOK.next))
 ```
 
 画面要跟着声音动（电平表、随旁白跳动的波形、音效起音时闪一下），在合成上写 `envelopes: true`，帧函数里读 `f.audio`：
@@ -262,7 +289,8 @@ npm run mfl -- render comp.ts                 # 成片
 - `narration(lines, { baseDir, voice, rate, cacheDir, offline, lead, gap, hold, tail })`：合成并排期，返回 `Narration`。
 - `vo.lines`：每句的 `from`/`to`（段落）、`speechFrom`/`speechTo`（开口、收声）、`words`（逐词时间和字符位置）。
 - `vo.timeline({ bpm })` / `vo.apply(tl)`：登记段落和 cue。
-- `vo.subtitles`：字幕轨，逐字时间，没有样式。`vo.subtitle(t)` 是某一帧的读数；写进合成之后，帧函数用 `f.subtitle`。`vo.clips({ bus, gain })`：旁白片段。`vo.line(id)`、`vo.lineAt(t)`、`vo.words`。
+- `vo.at(id, text, nth)`：这一句里第 nth 个含 text 的词开口的时刻，画面动作卡在词上用它；`vo.word(id, text, nth)` 取整个词。找不到就报错。
+- `vo.subtitles`：字幕轨，逐字时间，没有样式。`vo.subtitle(t)` 是某一帧的读数（`words`、`chars` 各带 `progress`）；写进合成之后，帧函数用 `f.subtitle`。`wordProgress(now, ch)`：字所在那个词的进度。`vo.clips({ bus, gain })`：旁白片段。`vo.line(id)`、`vo.lineAt(t)`、`vo.words`。
 - `edgeTts`、`synthesizeCached`：TTS 引擎和缓存，换引擎实现 `TtsEngine` 即可。
 
 **节点：**
@@ -274,18 +302,29 @@ npm run mfl -- render comp.ts                 # 成片
 - `shot({ width, height, stage, x, y, zoom, rotate, shakeX, shakeY, cover })`：镜头参数，纯函数。返回 `view`（写在取景窗那层）、`stage`（舞台层的宽高，有旋转时带 `rotate` 和 `origin`）、实际的 `zoom` 和 `toScreen(x, y)`。`(x, y)` 是舞台上要对准的点，落在取景窗中心；`shakeX`、`shakeY` 是成片像素；默认把 `zoom` 抬到刚好盖满舞台，`cover: false` 关掉。取景窗多大、放在哪、几个窗口取同一个舞台，都由调用方自己写。
 - `roll({ value, cell, size, axis, align }, items)`：滚动窗口。
 - `reveal({ progress, width, height, direction, feather }, ...children)`：蒙版擦除。
-- `typewriter(tokens, shown, style)`：打字机。
+- `typewriter(tokens, shown, style)`：打字机。token 是字符串或 `{ text, style, id }`，样式由调用方给；没打出来的部分保留样式、颜色换成透明来占位。
+- `placeGlyph(g, { x, y, scale, rotate, opacity }, pathAttrs)`：把 flexlayer `glyph()` 拆出的字形摆到字身中心 (x, y)。不给默认颜色，`fill`、`stroke` 写在 `pathAttrs` 里。
+- `runs(items, key)`：相邻、key 相同的项并成一段，`{ key, text, items }`。逐字算出样子，再并成几个 span。
 - `css(obj)`：样式对象转成样式字符串。
 - 原始 flexlayer 节点用 `h(tag, attrs, ...children)`。
+
+**几何与检查：**
+
+- `Bounds`：`{ left, top, right, bottom }`。`boundsOf(points)`、`unionBounds(...bs)`。
+- `mapBounds(b, fn)`：四个角各自映射后的外接框，`fn` 可以直接是 `cam.toScreen`。
+- `poseBounds(local, { x, y, rotate, scale })`：相对中心的框绕中心变换后放到 (x, y)。
+- `glyphBounds(g, pose)`：`placeGlyph` 摆好的字形，着墨的外接框。
+- `edgeRoom(b, W, H)`：离画布四边最近的距离，伸出去为负。
+- `expects(...rules)`：把这一帧成立的预期拼成 `expect` 的值，一条都不成立时是 undefined。
+- `pathLength(d)`：SVG 路径总长，`stroke-dasharray` 写字用。
 
 **draw 工具：**
 
 - `font(size, weight)`：字体字符串。
 - `drawGlyphs(ctx, str, { x, y, font, color, align, letterSpacing, each })`：逐字绘制。
 - `measureGlyphs(ctx, str)`：量出每个字的位置。
-- `strokeGlow(ctx, path, { color, width, glow })`：发光描边。
-- `glowDot(ctx, x, y, r, color, alpha)`：径向光点。
 - `sampleTextPoints(str, { font, width, height, step })`：把文字采样成点。
+- 发光、光点、颗粒这类质感不在框架里，用 canvas 的 `shadowBlur`、渐变自己画，写法见 [RECIPES.md](docs/RECIPES.md#质感颗粒暗角光)。
 - `createCanvas(w, h)`：离屏画布。
 - `rgba(hex, a)`、`mixColor(a, b, k)`、`colorRamp(stops, k)`：颜色。
 
@@ -316,7 +355,7 @@ npm run mfl -- render comp.ts                 # 成片
 
 问题码来自 flexlayer 的报告。多帧汇总后，每条都会给出出现了几帧、首末时间。
 
-预期中的问题写在那个元素上：`place({ …, attrs: { expect: 'overflow-canvas: 入场前停在画外' } })`。命中的问题降为 info；写了却没出现，报 `unused-expect`，所以 expect 要和实际情况一起开关（例如只在重叠的那几帧写）。要判断某一帧该不该写，可以用 `cam.toScreen` 算出元素在屏幕上的位置，见 showreel 的 `card()`。整类忽略用合成上的 `lint: { ignore: [...] }`，现在的示例都不需要。
+预期中的问题写在那个元素上：`place({ …, attrs: { expect: 'overflow-canvas: 入场前停在画外' } })`。命中的问题降为 info；写了却没出现，报 `unused-expect`，所以 expect 要和实际情况一起开关（例如只在重叠的那几帧写）。要判断某一帧该不该写，用几何算：`mapBounds(框, cam.toScreen)` 得到元素在屏幕上的外接框，`edgeRoom` 看离画布边多远，再用 `expects(条件 && '…')` 拼起来，见 showreel 的 `card()` 和 ink 的 `sticker()`。整类忽略用合成上的 `lint: { ignore: [...] }`，现在的示例都不需要。
 
 推镜、震屏用 `view` 取景：取景窗裁掉的部分不报 `overflow-canvas`，字号按屏幕上的大小查。`bleed` 已从 flexlayer 删除。
 
@@ -342,8 +381,8 @@ npm run mfl -- render comp.ts                 # 成片
 - **少用匀速：** 位移和缩放用 `spring` 或 `outCubic` / `outExpo`，退场用 `inCubic`。只有扫光、旋转这类持续运动才用匀速。
 - **错开：** 一组元素同时出现会显得死板。用 `stagger(i, n, { each: 0.04–0.08, from: 'center' })` 错开。
 - **预备和余韵：** 大动作前先反向收一下（蓄势），命中后让次要元素晚 50–100ms 跟上（跟随）。
-- **冲击三件套：** 同一个 cue 上同时做闪白（`pulse` 驱动亮度或 `glowDot`）、震屏（`wiggle × pulse`）、轻微缩放（zoom +3–6%）。再配上音频的冲击声和音乐闪避。
-- **跟着旁白：** 画面的变化落在关键词的开口时刻（`vo.line(id).words.find(…).from`），而不是段落开头。观众听到“重叠”时，画面上正好出现重叠。
+- **冲击由同一个包络驱动：** 一个 `pulse` 可以同时驱动亮度、震屏（`wiggle × pulse`）、缩放和声音的冲击。叠几种、多强、要不要震，由片子的语气定；安静的片子一次冲击也可以只是一个字落定。
+- **跟着旁白：** 画面的变化落在关键词的开口时刻（`vo.at(id, '重叠')`），而不是段落开头。观众听到“重叠”时，画面上正好出现重叠。
 - **层次：** 背景慢（周期 4–8 秒），主体中速，粒子和光点快。不同层的运动周期不同，画面才有纵深。
 - **留白：** 每段结尾留 0.3–0.5 秒让画面停住，再进下一段。
 

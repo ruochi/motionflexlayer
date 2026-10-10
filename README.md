@@ -4,18 +4,21 @@
 
 一帧画面是时间 `t` 的纯函数，返回一棵 flexlayer 节点树：文字和布局交给 flexlayer 排版，粒子、光效这类图形交给 `draw` 画，动效、时间轴、渲染和音频交给 motionflexlayer。画面和声音共用一条节拍时间轴，所以音画天然对齐。
 
+框架只给数据和机制：时间、旁白的逐字时间、几何、结构、检查。颜色、字体、字幕的样子、光效、HUD 都由每支片子自己写，框架里没有默认风格。
+
 ```ts
 import { defineComposition, place, pulse, spring, text, timeline } from 'motionflexlayer'
+import { LOOK } from './look.js'   // 这支片子自己的色板和字级
 
 const tl = timeline({ bpm: 120, duration: 6 }).cue('kick', [0.5, 1, 1.5, 2])
 
 export default defineComposition({
   id: 'demo', width: 1920, height: 1080, fps: 60, duration: 6,
-  background: '#0b0d12', color: '#f2efe8', timeline: tl,
+  background: LOOK.bg, color: LOOK.ink, timeline: tl,
   render: (f) => {
     const e = spring(f.t - 0.3)
     const k = pulse(f.t, tl.times('kick'))
-    return place({ x: 960, y: 540 + (1 - e) * 60, scale: 1 + 0.04 * k }, text('motion flexlayer', { fontSize: 120, fontWeight: 800 }))
+    return place({ x: 960, y: 540 + (1 - e) * 60, scale: 1 + 0.04 * k }, text('motion flexlayer', LOOK.title))
   },
   audio: ({ tl }) => ({ clips: tl.times('kick').map((at) => ({ src: './kick.wav', at })) }),
 })
@@ -23,7 +26,7 @@ export default defineComposition({
 
 ## 给模型看的入口
 
-让模型做动画时，先让它读 **[MOTION.md](MOTION.md)**。里面写了标准输入流程、心智模型、硬规则、四步工作流（时间轴 → 帧函数 → 音频 → 验证）、API 速查、动效基本功，以及怎样避免每支片子都一个样。
+让模型做动画时，先让它读 **[MOTION.md](MOTION.md)**。里面写了标准输入流程、框架和片子的分工（框架给机制，样子写在片子自己的 `look.ts`）、心智模型、硬规则、四步工作流（时间轴 → 帧函数 → 音频 → 验证）、API 速查和动效基本功。
 
 其余文档：
 
@@ -76,12 +79,14 @@ npm run voice -- examples/narrated/index.ts              # 合成或读取旁白
 
 ## 示例
 
+示例演示写法，不是模板。每个示例的样子都写在自己的 `look.ts`（narrated 和 hello-react 写在入口顶上），彼此故意不一样。
+
 | 示例 | 内容 |
 | --- | --- |
-| [examples/hello](examples/hello/index.ts) | 10 秒，核心写法的最小完整示例：逐字弹簧标题、蒙版擦除、节拍计数器、打字机、冲击震屏，配 BGM 和音效 |
-| [examples/hello-react](examples/hello-react/index.tsx) | 6 秒，React 写法：柱状图逐根长出、数字滚动、状态标签 |
-| [examples/showreel](examples/showreel/index.ts) | 48 秒、六段的参考片：几何、粒子、版式、3D 点云、落款。整首配乐用代码合成 |
-| [examples/narrated](examples/narrated/index.ts) | 约 33 秒的中文旁白片：时间轴由旁白长度决定，逐词字幕、人声波形、音乐给人声让频段、排版检查演示 |
+| [examples/hello](examples/hello/index.ts) | 10 秒，核心写法的最小完整示例：逐字弹簧标题、蒙版擦除、节拍计数器、打字机、冲击震屏，配 BGM 和音效。明黄底、近黑粗字 |
+| [examples/hello-react](examples/hello-react/index.tsx) | 6 秒，React 写法：柱状图逐根长出、数字滚动、状态标签。白底报表 |
+| [examples/showreel](examples/showreel/index.ts) | 48 秒、六段的参考片：几何、粒子、版式、3D 点云、落款。整首配乐用代码合成。深底加琥珀光、颗粒暗角 |
+| [examples/narrated](examples/narrated/index.ts) | 约 33 秒的中文旁白片：时间轴由旁白长度决定，逐词字幕、人声波形、音乐给人声让频段、排版检查演示。米色纸面讲义 |
 | [examples/ink](examples/ink/index.ts) | 72 秒、九个镜头的旁白片「着墨」：书法字一笔笔写出后落进段落里自己的格子，拖动栏宽逐帧重排再改竖排，三个字合成一圈墨迹描边，玻璃折射，挤出的立体字，镜头推向排版算出的一点，按着墨对齐。每个镜头都是网页或手写 canvas 要多费不少力气的事 |
 | [examples/synth](examples/synth/index.ts) | 程序化合成器套件，showreel 的配乐用的就是它 |
 
@@ -92,7 +97,8 @@ src/
   math.ts ease.ts motion.ts random.ts color.ts   时间、缓动、弹簧、噪声、颜色
   timeline.ts                                   节拍、段落、cue
   composition.ts                                defineComposition、帧、加载
-  nodes.ts drawkit.ts canvas.ts                 动效原语（镜头参数 shot、滚动、擦除、打字）、draw 工具
+  nodes.ts drawkit.ts canvas.ts                 动效原语（镜头参数 shot、滚动、擦除、打字、摆字形）、draw 工具
+  geometry.ts text.ts                           外接框、离画布边多远、expect 开关、路径长度；逐字分段 runs
   render/                                       静帧、联系表、多进程视频、问题汇总
   audio/                                        AudioSpec 编译成 visualtone 乐谱、混音、包络、WAV、报告、波形
   voice/                                        TTS（edge-tts）、缓存、旁白时间轴、逐词对齐
@@ -107,4 +113,5 @@ src/
 - 视频帧走 flexlayer 的 `renderFrames` 原始 RGBA 输出，0.1 的 PNG 跳过垫片已删除。
 - 混音交给 visualtone：响度归一、限幅、人声闪避和分析报告都来自它。设了 `envelopes: true` 的合成，帧函数可以通过 `f.audio` 读到各音轨的电平和起音。
 - 依赖 flexlayer 0.2.30：镜头用 `view` 取景，`shot()` 算参数，结构由调用方写两层 layer；字号按屏幕上的大小和短边检查，示例都不再整类忽略问题码。还需要 flexlayer 配合的改动见 [FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)，例如离屏画布按可见区域裁剪、被取景窗裁开的文字怎么报 `outside-safe`。
+- 框架不带视觉风格：0.2 里的 `strokeGlow`、`glowDot` 已删除（写法见 RECIPES 的“质感”），`typewriter` 的 token 从 `[文字, 颜色]` 改成 `{ text, style }`，字幕只出逐字时间。
 - 音频是按响度报告、频段分析和波形检查的，没有人工试听过。
