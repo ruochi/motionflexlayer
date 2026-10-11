@@ -1,6 +1,8 @@
 import { checkFvg, h } from 'flexlayer'
 import { describe, expect, it } from 'vitest'
+import { defineComposition } from '../src/composition.js'
 import { shot } from '../src/nodes.js'
+import { renderRgba } from '../src/render/frame.js'
 import { shot3d, type Pose3D } from '../src/shot3d.js'
 
 const W = 1280
@@ -118,6 +120,39 @@ describe('shot3d', () => {
     const c = cam.toScreen(500, 300, -200)!
     expect((quad[0]![0]! + quad[2]![0]!) / 2).toBeCloseTo(c[0], 1)
     expect((quad[0]![1]! + quad[2]![1]!) / 2).toBeCloseTo(c[1], 1)
+  })
+
+  it('lens 按全画幅等效换算视角：24mm 的视距正好是取景窗高度', () => {
+    expect(shot3d({ width: W, height: H, lens: 24 }).perspective).toBeCloseTo(H, 1)
+    expect(shot3d({ width: W, height: H, lens: 50 }).perspective).toBeCloseTo((H * 50) / 24, 1)
+    expect(shot3d({ width: W, height: H, lens: 50, perspective: 900 }).perspective).toBe(900)
+  })
+
+  it('景深默认对在对准点；也能对到一个世界坐标；sharp 的物体不糊', () => {
+    const cam = shot3d({ width: W, height: H, yaw: 30, aperture: 10 })
+    expect(cam.focus).toBeCloseTo(cam.distance, 6)
+    expect(cam.pose({ x: W / 2, y: H / 2, width: 100, height: 100 })!.blur).toBeUndefined()
+    expect(Number(cam.pose({ x: W / 2, y: H / 2, z: -2000, width: 100, height: 100 })!.blur)).toBeGreaterThan(0)
+    expect(cam.pose({ x: W / 2, y: H / 2, z: -2000, width: 100, height: 100, sharp: true })!.blur).toBeUndefined()
+    const far = shot3d({ width: W, height: H, yaw: 30, aperture: 10, focus: [W / 2, H / 2, -2000] })
+    expect(far.pose({ x: W / 2, y: H / 2, z: -2000, width: 100, height: 100 })!.blur).toBeUndefined()
+    expect(far.blurAt(far.distance)).toBeGreaterThan(0)
+  })
+
+  it.each([false, true])('景深：屏幕上的模糊半径和 blurAt 一致（场景里有网格：%s）', async (withMesh) => {
+    const SW = 800
+    const SH = 400
+    const cam = shot3d({ width: SW, height: SH, aperture: 8, focus: 300 })
+    for (const [z, scale] of [[0, 1], [-600, 1], [-1500, 1], [200, 0.5]] as const) {
+      const card = cam.place({ x: 400, y: 200, z, scale, width: 200, height: 100 }, h('rect', { x: 0, y: 0, width: 200, height: 100, fill: '#ffffff' }))
+      const ball = withMesh ? cam.place({ x: 60, y: 60, z: -50, width: 40, height: 40, sharp: true }, h('sphere', { cx: 20, cy: 20, r: 20, fill: '#888888' })) : null
+      const comp = defineComposition({ width: SW, height: SH, duration: 1, background: '#000000', render: () => h('layer', { width: SW, height: SH }, cam.scene(ball, card)) })
+      const { rgba } = await renderRgba(comp, 0)
+      const row = Array.from({ length: 400 }, (_, x) => rgba[(200 * SW + x) * 4]!)
+      const sigma = (row.findIndex((v) => v > 230) - row.findIndex((v) => v > 25)) / 2.56
+      const want = cam.blurAt(cam.project(400, 200, z)!.depth)
+      expect(Math.abs(sigma - want)).toBeLessThan(Math.max(0.6, want * 0.15))
+    }
   })
 
   it('观众身后的物体不进文档', () => {
