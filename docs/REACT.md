@@ -129,6 +129,8 @@ const cam = shot3d({ width: 1920, height: 1080, x, y, zoom, yaw, pitch })
 </layer>
 ```
 
+用了景深（`aperture`）时，JSX 里展开 `cam.layer` 拿不到 `cam.scene()` 对 flexlayer `blur` 倍数的修正，三维平面上的模糊会偏弱（只有平面时 1/4，有网格时 1/2）。需要景深的镜头先用核心 API 的 `cam.scene()` 组装，再用 `<Raw node={…}>` 放进来。
+
 `style` 可以是字符串，也可以是对象。对象的键用驼峰写法，数字会自动加 `px`。`opacity`、`fontWeight`、`lineHeight`、`zIndex`、`flex*`、`order` 这几个不加单位。
 
 ## `draw` 闭包

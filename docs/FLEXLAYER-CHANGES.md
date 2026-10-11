@@ -26,7 +26,7 @@ motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做
 | 16 | P1 | 合并子树墨迹时进 `g` | ✅ 已完成 | 无（`glyphAt` 每字一层 layer 只为绕字身中心转） |
 | 17 | P2 | `canvas.create` 的字带上原文位置；竖排按列给 | 部分：字带上所在 span 的 `id` | `examples/ink/page.ts` 的 `cells()` 已改成按 id 取；`type.ts` 竖排仍按 `x` 分列 |
 | 18 | P2 | 被取景窗裁开的文字和 `outside-safe` | 新增 | `examples/ink/page.ts`、`showreel` 卡片上的 `expect` |
-| 19 | P2 | 三维镜头：`behind-camera` 的口径、嵌套平面复合姿态、斜平面上的 `text-overlap` | 新增 | `src/shot3d.ts` 的 `pose()`、`examples/orbit` 卡片上的 `expect` |
+| 19 | P2 | 三维镜头：`behind-camera` 的口径、嵌套平面复合姿态、三维平面和网格上的 `blur`、斜平面上的 `text-overlap` | 新增 | `src/shot3d.ts` 的 `pose()` 和 `PLANE_BLUR_FIX`、`examples/orbit` 卡片上的 `expect` |
 | 20 | P1 | 新增 `camera` 属性：焦距、对准点、机位、主点偏移；`perspective` 留作只有焦距的简写 | 新增 | `src/shot3d.ts` 的 `pose()` / `place()` 整段；包含第 19 项的 `behind-camera` 口径 |
 
 ---
@@ -255,6 +255,15 @@ motionflexlayer 的 `shot3d()` 把机位变换乘进每个物体，算出 `persp
 - 建议：可选的 `preserve-3d`（或让没有压平效果的嵌套 layer 默认不压平），平面像网格一样沿父链复合姿态，进同一次深度排序或深度缓冲；
 - 改完后：`shot3d()` 可以多给一个 `world` 属性组，写在一层包住场景的 layer 上，和 `view` + `stage` 的两层结构对齐；`cam.place` 留给不想嵌套的写法。
 
+**三维平面上的 `blur` 被超采样稀释，网格上的 `blur` 被忽略。** 实测 0.2.30（`blur="10"` 的白色矩形，量 10%–90% 的边缘宽度）：
+
+- 没有三维姿态时，屏幕上的模糊半径就是 10；
+- 只要带了 `z` 或 `rotateX` / `rotateY`（哪怕 `z="0.001"`），平面先按 4 倍超采样画进离屏，`blur` 却按离屏像素算，屏幕上只剩 2.5，之后再跟着投影缩放；
+- 场景里有网格时，所有平面走网格光栅那条路，只剩 1/2，有没有三维姿态都一样；
+- 写在包着 `sphere` 的 layer 上，模糊完全不生效，也不报问题。
+
+motionflexlayer 现在的做法：`cam.scene()` 按场景里有没有网格，把直接子元素的 `blur` 乘 4 或乘 2（`src/shot3d.ts` 的 `PLANE_BLUR_FIX`）。建议 `blur`、`shadow`、`glow` 的半径在离屏里一律乘上超采样倍数，语义统一成“平面局部像素”；网格上的 `blur` 要么生效（整台网格画完后按层糊），要么报 `invalid-attr`。改完后删掉 `PLANE_BLUR_FIX`，`cam.scene()` 只剩一行。
+
 **斜平面上的 `text-overlap`。** 判重叠用的是投影后的轴对齐外接框，卡片一斜，同一张卡片里上下两行字的外接框就压到一起。建议改用报告里已有的 `quad` 判相交。`examples/orbit` 现在在卡片上写 `expect`。
 
 **验收。** `shot3d({ pitch: 4 })` 看一块 `rotateX: 90` 的地板，不写宽高时不报 `behind-camera`；一层 `preserve-3d` 的 layer 里放两张 `z` 不同的卡片，外层再转 `rotateY`，两张卡片的 `quad` 和直接写成 `perspective` 层子元素时一致。
@@ -302,6 +311,16 @@ h('layer', { width: 1920, height: 1080, camera: { fov: 40, at: [980, 640, 0], or
 | `zoom <k>` | 推近倍数，靠机位前后移动：机位到对准点的距离 = `focal / k` | `1` |
 | `from x y z` | 机位坐标。写了就由它和 `at` 算 `orbit`、`zoom`，两者不能再写 | — |
 | `shift x y` | 主点偏移，取景窗像素。灭点 = 盒子中心 + shift | `0 0` |
+| `lens <mm>` | 全画幅等效焦距，`fov = 2·atan(12 / mm)`。和 `fov`、`focal` 三选一 | — |
+| `aperture <px>` | 景深：无限远处的模糊半径，取景窗像素。不写就没有景深 | — |
+| `focus <px>` 或 `focus x y z` | 对焦距离（从机位沿视线量），或对到一个点所在的深度 | 对准点 |
+
+**景深在 flexlayer 里做，才能逐像素。** motionflexlayer 现在只能给每张平面写一个 `blur`，按中心深度算，所以斜着的地板整张一个模糊值，网格永远清楚。镜头写进 flexlayer 以后：
+
+- 有网格的场景已经有深度缓冲。画完颜色和深度后，按每个像素的深度算模糊半径（`aperture × |深度 − focus| / 深度`），做一次变半径的模糊，前景的模糊边缘要能盖到背景上；
+- 只有平面的场景，每张平面按投影后每个像素的深度算，不再整张一个值；
+- 模糊半径按取景窗像素给，`blur` 的超采样倍数问题（第 19 项）在这里不再出现；
+- 报告里每个元素加一个 `defocus`（中心处的模糊半径），`min-font-size` 这类文字检查对糊掉的字可以放宽。
 
 默认机位（只写焦距）就是现在的行为：机位在 `(宽/2, 高/2, focal)`，正对盒子。
 
@@ -324,7 +343,7 @@ h('layer', { width: 1920, height: 1080, camera: { fov: 40, at: [980, 640, 0], or
 **motionflexlayer 改完后。**
 
 - `shot3d()` 和 `shot()` 完全对称：只算镜头参数，`cam.layer` 变成 `{ width, height, camera: { … } }`，对象直接交给 flexlayer，不用自己拼字符串；React 里 `<layer {...cam.layer}>` 照旧；
-- 物体直接用 `place()` 写世界姿态（`PlaceOptions` 加 `rotateX`、`rotateY`、`z`），`cam.place()`、`cam.pose()` 以及里面的欧拉角拆分、`origin` 分摊都删掉；
+- 物体直接用 `place()` 写世界姿态（`PlaceOptions` 加 `rotateX`、`rotateY`、`z`），`cam.place()`、`cam.pose()` 以及里面的欧拉角拆分、`origin` 分摊、按中心深度写 `blur`、`PLANE_BLUR_FIX` 都删掉；`sharp` 换成 flexlayer 上一个不吃景深的属性；
 - `toScreen`、`project` 保留，给镜头外的标注和 `draw` 里的点云用，公式和 flexlayer 同一套。
 
 **验收。**
