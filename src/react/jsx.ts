@@ -70,6 +70,10 @@ export type LayerProps = Positioned &
     safe?: Num
     opacity?: Num
     rotate?: Num
+    /** 只在带 perspective 的父层里生效。三维镜头里用 shot3d().pose() 算。 */
+    rotateX?: Num
+    rotateY?: Num
+    z?: Num
     scale?: Num
     origin?: string
     overflow?: 'hidden' | 'visible'

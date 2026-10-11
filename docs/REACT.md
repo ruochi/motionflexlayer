@@ -118,6 +118,17 @@ const cam = shot({ width: 1920, height: 1080, x, y, zoom, shakeX })
 </layer>
 ```
 
+三维镜头同样没有组件：`shot3d()` 的 `layer` 展开在三维取景窗上，`pose()` 展开在每个物体那层上。物体必须是取景窗的直接子元素，其它 layer 属性照常写在后面：
+
+```tsx
+const cam = shot3d({ width: 1920, height: 1080, x, y, zoom, yaw, pitch })
+<layer {...cam.layer}>
+  <layer {...cam.pose({ x: 700, y: 672, z: -320, width: 300, height: 200 })} glow="24 #f2b84b88">
+    <Box style={{ width: 300, height: 200, background: '#22324d', borderRadius: 28 }}>…</Box>
+  </layer>
+</layer>
+```
+
 `style` 可以是字符串，也可以是对象。对象的键用驼峰写法，数字会自动加 `px`。`opacity`、`fontWeight`、`lineHeight`、`zIndex`、`flex*`、`order` 这几个不加单位。
 
 ## `draw` 闭包
