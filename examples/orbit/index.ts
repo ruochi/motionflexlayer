@@ -7,6 +7,8 @@
  *   - 平面卡片（HTML 文字）和网格（box、sphere）：cam.place() 算出每个物体的姿态，都是 perspective 层的直接子元素；
  *   - draw 里画的点环：cam.project() 逐点投影；
  *   - 镜头外的标注：cam.toScreen() 跟住三维里的一点。
+ * 35mm 镜头带景深，对焦点从“远”拉到“近”：卡片按自己的深度糊，点环按 cam.blurAt() 摊成光斑。
+ * 卡片要用 cam.scene() 组装，它负责修正 flexlayer 三维平面上 blur 的倍数。
  * 震屏仍交给外面一层 shot() 的 view：三维取景窗是它的舞台。
  */
 import { box, defineComposition, fade, fx, h, keyframes, place, pulse, shot, shot3d, text, wiggle, type Frame } from 'motionflexlayer'
@@ -29,10 +31,24 @@ const CARDS = [
 const CARD_W = 300
 const CARD_H = 200
 
+/** 拉焦：对焦点从“远”移到“近”。 */
+function focusPoint(t: number): [number, number, number] {
+  const k = keyframes(t, [
+    { at: 1.5, value: 0 },
+    { at: 5.5, value: 1, ease: 'inOutCubic' },
+  ])
+  const a = CARDS[0]!
+  const b = CARDS[2]!
+  return [a.x + (b.x - a.x) * k, FLOOR_Y - CARD_H / 2, a.z + (b.z - a.z) * k]
+}
+
 function camera(t: number) {
   return shot3d({
     width: W,
     height: H,
+    lens: 35,
+    aperture: 10,
+    focus: focusPoint(t),
     x: 980,
     y: 640,
     z: 0,
@@ -81,10 +97,13 @@ function ring(cam: ReturnType<typeof shot3d>, t: number) {
     }
     pts.sort((a, b) => b.depth - a.depth)
     for (const p of pts) {
-      ctx.globalAlpha = Math.min(1, 0.25 + 0.6 * p.scale)
+      // 失焦的点摊开成更大、更淡的光斑，亮度总量大致不变。
+      const r = 5 * p.scale
+      const soft = r + cam.blurAt(p.depth)
+      ctx.globalAlpha = Math.min(1, 0.25 + 0.6 * p.scale) * (r / soft) ** 2
       ctx.fillStyle = ACCENT
       ctx.beginPath()
-      ctx.arc(p.x, p.y, 5 * p.scale, 0, Math.PI * 2)
+      ctx.arc(p.x, p.y, soft, 0, Math.PI * 2)
       ctx.fill()
     }
     ctx.globalAlpha = 1
@@ -97,7 +116,7 @@ function scene(f: Frame) {
   const hop = Math.max(0, Math.sin((t - 1) * 2.2)) * 120
   const objects = [
     cam.place(
-      { x: 980, y: FLOOR_Y, z: 0, rotateX: 90, width: 1500, height: 1300 },
+      { x: 980, y: FLOOR_Y, z: 0, rotateX: 90, width: 1500, height: 1300, sharp: true },
       h('box', { x: 0, y: 0, width: 1500, height: 1300, depth: 16, fill: '#232733' }),
     ),
     ...CARDS.map((c) =>
@@ -106,7 +125,7 @@ function scene(f: Frame) {
         card(c),
       ),
     ),
-    cam.place({ x: 1420, y: FLOOR_Y - 8 - 70 - hop, z: -160, width: 140, height: 140 }, h('sphere', { cx: 70, cy: 70, r: 70, fill: ACCENT })),
+    cam.place({ x: 1420, y: FLOOR_Y - 8 - 70 - hop, z: -160, width: 140, height: 140, sharp: true }, h('sphere', { cx: 70, cy: 70, r: 70, fill: ACCENT })),
   ]
 
   const k = pulse(t, [HIT], 7)
@@ -120,14 +139,14 @@ function scene(f: Frame) {
     h(
       'layer',
       { width: W, height: H, view: outer.view },
-      h('layer', outer.stage, h('rect', { x: 0, y: 0, width: W, height: H, fill: BG }), h('layer', cam.layer, ...objects), ring(cam, t)),
+      h('layer', outer.stage, h('rect', { x: 0, y: 0, width: W, height: H, fill: BG }), cam.scene(...objects), ring(cam, t)),
     ),
     tag
       ? place({ x: tag[0], y: tag[1] - 40, anchor: 'bottom', opacity: tagA }, text('cam.toScreen() 跟住卡片顶边', { fontSize: 30, color: ACCENT }))
       : null,
     place(
       { x: 120, y: 110, anchor: 'top-left' },
-      text(`shot3d  yaw ${cam.yaw.toFixed(0)}°  pitch ${cam.pitch.toFixed(0)}°  zoom ${cam.zoom.toFixed(2)}`, { fontSize: 34, color: MUTED }),
+      text(`shot3d  35mm  yaw ${cam.yaw.toFixed(0)}°  pitch ${cam.pitch.toFixed(0)}°  zoom ${cam.zoom.toFixed(2)}  focus ${cam.focus.toFixed(0)}`, { fontSize: 34, color: MUTED }),
     ),
   ]
 }
