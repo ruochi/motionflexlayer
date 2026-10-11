@@ -26,6 +26,7 @@ motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做
 | 16 | P1 | 合并子树墨迹时进 `g` | ✅ 已完成 | 无（`glyphAt` 每字一层 layer 只为绕字身中心转） |
 | 17 | P2 | `canvas.create` 的字带上原文位置；竖排按列给 | 部分：字带上所在 span 的 `id` | `examples/ink/page.ts` 的 `cells()` 已改成按 id 取；`type.ts` 竖排仍按 `x` 分列 |
 | 18 | P2 | 被取景窗裁开的文字和 `outside-safe` | 新增 | `examples/ink/page.ts`、`showreel` 卡片上的 `expect` |
+| 19 | P2 | 三维镜头：`behind-camera` 的口径、嵌套平面复合姿态、斜平面上的 `text-overlap` | 新增 | `src/shot3d.ts` 的 `pose()`、`examples/orbit` 卡片上的 `expect` |
 
 ---
 
@@ -238,6 +239,25 @@ flexlayer 改用 `linebreak` 断行，并避开行首标点。ink 示例那段�
 - 被 `view` 窗口边缘裁开的文字不报 `outside-safe`（和 `overflow-canvas` 一致），只看仍在窗内的部分；
 - 或者保持现状，但在 SPEC 里写明“推近时被取景窗裁开的文字会报，按帧写 `expect`”，以及“只比较左右”。
 
+## 19. 三维镜头（P2，新增）
+
+motionflexlayer 的 `shot3d()` 把机位变换乘进每个物体，算出 `perspective` 层直接子元素的 `x`、`y`、`z`、`rotateX`、`rotateY`、`rotate`、`origin`。0.2.30 下能用，有三处绕路或瑕疵：
+
+**`behind-camera` 的口径。** `perspectiveIssues` 拿 `z` 属性和视距比，绘制拿平面中心的真实深度（`planeDepth`、网格支点的深度）比。`z` 加在旋转之前、沿平面自己的法线走，贴地的平面在低机位下法线几乎平行于画面，要很大的 `z` 才能放到该在的深度：中心明明在观众前面、也画出来了，却报 `behind-camera`。
+
+- motionflexlayer 现在的做法：给了 `width`、`height` 时，`pose()` 把深度按最小范数分摊到 `z` 和 `origin` 的偏移上，`|z|` 不超过真实深度；
+- 建议：检查也用 `planeDepth(child) >= perspective`，和绘制同一口径；
+- 改完后：`pose()` 不再需要挪 `origin`，没给宽高的物体也不会误报。
+
+**嵌套平面不复合三维姿态。** 网格（`collectMeshes`）会一路乘 `poseMatrix`，平面只有 `perspective` 层的直接子元素才投影，再往里的先画进父平面。所以镜头不能像 `view` 那样写成一层包住整个世界的 layer，分组（一组卡片一起转）也只能在 motionflexlayer 里乘矩阵。
+
+- 建议：可选的 `preserve-3d`（或让没有压平效果的嵌套 layer 默认不压平），平面像网格一样沿父链复合姿态，进同一次深度排序或深度缓冲；
+- 改完后：`shot3d()` 可以多给一个 `world` 属性组，写在一层包住场景的 layer 上，和 `view` + `stage` 的两层结构对齐；`cam.place` 留给不想嵌套的写法。
+
+**斜平面上的 `text-overlap`。** 判重叠用的是投影后的轴对齐外接框，卡片一斜，同一张卡片里上下两行字的外接框就压到一起。建议改用报告里已有的 `quad` 判相交。`examples/orbit` 现在在卡片上写 `expect`。
+
+**验收。** `shot3d({ pitch: 4 })` 看一块 `rotateX: 90` 的地板，不写宽高时不报 `behind-camera`；一层 `preserve-3d` 的 layer 里放两张 `z` 不同的卡片，外层再转 `rotateY`，两张卡片的 `quad` 和直接写成 `perspective` 层子元素时一致。
+
 ---
 
 ## 不需要 flexlayer 改的
@@ -245,7 +265,7 @@ flexlayer 改用 `linebreak` 断行，并避开行首标点。ink 示例那段�
 下面这些放在 motionflexlayer 里做，flexlayer 不用管：
 
 - 时间轴、节拍、cue、段落；
-- 镜头参数（`shot()`：对准、推近、旋转、震屏、盖满）、滚动、擦除、打字机这些原语；
+- 镜头参数（`shot()`：对准、推近、旋转、震屏、盖满；`shot3d()`：环绕机位、视角、世界姿态到层属性）、滚动、擦除、打字机这些原语；
 - 多进程渲染、ffmpeg；
 - 旁白合成与排期；
 - 音频混音（由 visualtone 负责）；

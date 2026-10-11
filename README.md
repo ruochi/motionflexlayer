@@ -83,6 +83,7 @@ npm run voice -- examples/narrated/index.ts              # 合成或读取旁白
 | [examples/showreel](examples/showreel/index.ts) | 48 秒、六段的参考片：几何、粒子、版式、3D 点云、落款。整首配乐用代码合成 |
 | [examples/narrated](examples/narrated/index.ts) | 约 33 秒的中文旁白片：时间轴由旁白长度决定，逐词字幕、人声波形、音乐给人声让频段、排版检查演示 |
 | [examples/ink](examples/ink/index.ts) | 72 秒、九个镜头的旁白片「着墨」：书法字一笔笔写出后落进段落里自己的格子，拖动栏宽逐帧重排再改竖排，三个字合成一圈墨迹描边，玻璃折射，挤出的立体字，镜头推向排版算出的一点，按着墨对齐。每个镜头都是网页或手写 canvas 要多费不少力气的事 |
+| [examples/orbit](examples/orbit/index.ts) | 8 秒，三维镜头 `shot3d()`：机位绕着卡片、地板和球转，`draw` 里的点环和镜头外的标注跟着同一台相机 |
 | [examples/synth](examples/synth/index.ts) | 程序化合成器套件，showreel 的配乐用的就是它 |
 
 ## 目录
