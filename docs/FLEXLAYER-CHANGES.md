@@ -27,6 +27,7 @@ motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做
 | 17 | P2 | `canvas.create` 的字带上原文位置；竖排按列给 | 部分：字带上所在 span 的 `id` | `examples/ink/page.ts` 的 `cells()` 已改成按 id 取；`type.ts` 竖排仍按 `x` 分列 |
 | 18 | P2 | 被取景窗裁开的文字和 `outside-safe` | 新增 | `examples/ink/page.ts`、`showreel` 卡片上的 `expect` |
 | 19 | P2 | 三维镜头：`behind-camera` 的口径、嵌套平面复合姿态、斜平面上的 `text-overlap` | 新增 | `src/shot3d.ts` 的 `pose()`、`examples/orbit` 卡片上的 `expect` |
+| 20 | P1 | `perspective` 改成多值的镜头属性：焦距、对准点、机位、主点偏移 | 新增 | `src/shot3d.ts` 的 `pose()` / `place()` 整段；包含第 19 项的 `behind-camera` 口径 |
 
 ---
 
@@ -257,6 +258,66 @@ motionflexlayer 的 `shot3d()` 把机位变换乘进每个物体，算出 `persp
 **斜平面上的 `text-overlap`。** 判重叠用的是投影后的轴对齐外接框，卡片一斜，同一张卡片里上下两行字的外接框就压到一起。建议改用报告里已有的 `quad` 判相交。`examples/orbit` 现在在卡片上写 `expect`。
 
 **验收。** `shot3d({ pitch: 4 })` 看一块 `rotateX: 90` 的地板，不写宽高时不报 `behind-camera`；一层 `preserve-3d` 的 layer 里放两张 `z` 不同的卡片，外层再转 `rotateY`，两张卡片的 `quad` 和直接写成 `perspective` 层子元素时一致。
+
+## 20. `perspective` 改成多值的镜头属性（P1，新增）
+
+**问题。** `perspective` 现在只有一个数：观众到 `z = 0` 平面的距离，灭点固定在盒子中心，机位固定正对盒子。焦距、主点、机位、朝向都是同一台镜头的属性，却只能写出第一个，剩下的要由 motionflexlayer 乘进每个物体（第 19 项）。后果是：
+
+- 物体的 `x`、`y`、`z`、`rotateX`、`rotateY`、`rotate` 不再是它在世界里的姿态，而是“世界姿态 × 镜头”拆出来的数，作者没法直接读写；镜头一动，每个物体的属性都变；
+- 拆分要靠 `origin` 绕开 `behind-camera` 的误报，报告里的 `box` 也不再是物体的世界位置；
+- 离轴（主点偏移、移轴）做不了。
+
+二维已经有对应的写法：`view="x y w h"` 把一整台二维镜头写在取景窗那层上，子元素照常用舞台坐标。三维应当一样：镜头写在 `perspective` 那层上，直接子元素写世界姿态。
+
+**建议。** `perspective` 接受多段，写法和 `grade` 一样用逗号分段、每段一个名字。只写一个数时含义不变，现有文件不用改：
+
+```html
+<layer width="1920" height="1080" perspective="1484">                                        <!-- 现在的写法：视距 1484，机位正对盒子中心 -->
+<layer width="1920" height="1080" perspective="fov 40, at 980 640 0, orbit 30 15, zoom 1.2">  <!-- 环绕机位 -->
+<layer width="1920" height="1080" perspective="fov 40, at 980 640 0, from 1400 300 900">      <!-- 给出机位 -->
+<layer width="1920" height="1080" perspective="1484, shift 0 -120">                           <!-- 离轴：灭点上移 120px -->
+```
+
+| 段 | 含义 | 缺省 |
+| --- | --- | --- |
+| 开头的数，或 `focal <px>` | 焦距，像素。即现在的视距 | 由 `fov` 算；都没写时报 `invalid-attr` |
+| `fov <度>` | 竖直视角，`focal = 高 / 2 / tan(fov / 2)` | — |
+| `at x y z` | 对准点，这一层局部坐标（左上角为原点，y 向下，z 朝观众），落在取景窗中心 | 盒子中心，`z = 0` |
+| `orbit yaw pitch` | 机位绕对准点转，度。`yaw` 正数往右绕，`pitch` 正数从上往下看 | `0 0` |
+| `roll <度>` | 镜头绕视线转，正数时画面里的内容绕对准点顺时针转，和 `shot()` 的 `rotate` 同号 | `0` |
+| `zoom <k>` | 推近倍数，靠机位前后移动：机位到对准点的距离 = `focal / k` | `1` |
+| `from x y z` | 机位坐标。写了就由它和 `at` 算 `orbit`、`zoom`，两者不能再写 | — |
+| `shift x y` | 主点偏移，取景窗像素。灭点 = 盒子中心 + shift | `0 0` |
+
+默认机位（只写焦距）就是现在的行为：机位在 `(宽/2, 高/2, focal)`，正对盒子。
+
+**语义。** 设镜头的视图矩阵为 `V`（`at`、`orbit`、`roll`、`zoom` 算出），这一层的直接子元素：
+
+- `x`、`y`、`z`、`rotateX`、`rotateY`、`rotate`、`scale`、`origin` 是世界姿态，含义和现在一样；
+- 投影前先乘 `V`：平面用 `V · posePoint`，网格用 `V · poseMatrix`（嵌套层照旧沿父链乘），灭点加上 `shift`；
+- 深度排序、`behind-camera`、`quad`、投影后的 `ink`、`overflow-canvas`、屏幕字号，都按乘过 `V` 之后的坐标算。顺带解决第 19 项的 `behind-camera` 口径；
+- 镜头不在默认机位时，没有自己三维姿态的子元素也要走投影，不能再走二维绘制；
+- 和 `view` 仍然不能写在同一层。震屏、调色写在外面的 `view` 取景窗上，三维取景窗是它的舞台。
+
+**改动面。** 投影都经过 `posePoint`、`poseMatrix`、`planeDepth` 三个函数，镜头矩阵乘在它们前面即可：
+
+- `layout.ts`：解析 `perspective` 的多段写法，存成焦距、`V`、`shift`；
+- `perspective.ts`：从这些段算出 `V`，给上面三个函数加一个乘 `V` 的版本；
+- `paint.ts` 的 `paintPerspectiveChildren`、`mesh.ts` 的 `renderMeshLayer`、`report.ts` 的平面投影和 `meshView`、`perspectiveIssues`：改用乘过 `V` 的版本，灭点加 `shift`；
+- `schema.ts`、SPEC：登记新写法。`docs/proposals/3D.md` 里“不要另起 `camera`”“不做独立相机”两条要改：镜头仍然只是 `perspective` 这一个属性，不加标签；变的是它能写出完整的一台镜头。
+
+**motionflexlayer 改完后。**
+
+- `shot3d()` 和 `shot()` 完全对称：只算一个字符串，`cam.layer.perspective` 就是上面的多段写法；
+- 物体直接用 `place()` 写世界姿态（`PlaceOptions` 加 `rotateX`、`rotateY`、`z`），`cam.place()`、`cam.pose()` 以及里面的欧拉角拆分、`origin` 分摊都删掉；
+- `toScreen`、`project` 保留，给镜头外的标注和 `draw` 里的点云用，公式和 flexlayer 同一套。
+
+**验收。**
+
+- 只写一个数的 `perspective`，现有测试的像素和报告不变；
+- `perspective="fov 40, at 980 640 0, orbit 35 18, zoom 0.8"` 下，世界姿态写的卡片，报告里的 `quad` 和 motionflexlayer 现在 `shot3d().pose()` 拆出来的结果一致（误差 0.6px 以内，`test/shot3d.spec.ts` 的同一组用例）；
+- `shift 0 -120` 时，对准点落在取景窗中心上方 120px；
+- 低机位（`orbit 0 4`）看一块 `rotateX="90"` 的地板，不报 `behind-camera`。
 
 ---
 
