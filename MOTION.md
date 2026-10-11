@@ -56,7 +56,7 @@
 
 | 层 | 用什么 | 负责 |
 | --- | --- | --- |
-| 结构 | `layer`、HTML 文字、`div` 的 flex，以及 `place` / `roll` / `reveal` / `typewriter`；镜头用 `view` 取景，参数由 `shot()` 算 | 有哪些东西、在哪、什么时候出现、怎么排 |
+| 结构 | `layer`、HTML 文字、`div` 的 flex，以及 `place` / `roll` / `reveal` / `typewriter`；镜头用 `view` 取景，参数由 `shot()` 算；三维镜头用 `perspective`，参数由 `shot3d()` 算 | 有哪些东西、在哪、什么时候出现、怎么排 |
 | 像素 | `draw` 回调：`fx()` 或任意自定义标签 | 笔触、粒子、光效、数据图、3D 点云 |
 | 时间 | `timeline()`、`progress` / `fade` / `spring` / `pulse` / `stagger` | 一切数值随 t 变化 |
 | 声音 | `audio.clips`、`buses`、`duck`、`tracks` | 旁白、音乐、音效放到 cue 上，由 visualtone 混音 |
@@ -74,6 +74,7 @@
 | 嵌套 `layer` 只定位，不排版 | 一个 `layer` 里并排放两段文字 | `place({…}, box({ display: 'flex', gap: 12 }, a, b))` | 文字叠在一起，报 `text-overlap` |
 | 嵌套 `layer` 不填背景 | `h('layer', { background: '#fff' })` | 用 `rect`、HTML `background` 或 `draw` | `invalid-attr` |
 | 推镜、震屏用取景窗，不缩放整个画面 | `place({ x: 960, y: 540, width: W, height: H, scale: zoom, origin: [x, y] }, …scene)` | `const cam = shot({ width: W, height: H, x, y, zoom })`，再写 `h('layer', { width: W, height: H, view: cam.view }, h('layer', cam.stage, …scene))` | 出画的元素每帧报 `overflow-canvas`，字号按名义大小查，露底也查不出来 |
+| 三维镜头的物体都是 `cam.scene` 的直接子元素 | `cam.scene(h('layer', { rotateY: -yaw }, ...scene))`，用一层包住整个场景再转 | `cam.scene(cam.place({ x, y, z, rotateY }, card), …)`，每个物体一次 `cam.place` | flexlayer 只投影 `perspective` 层的直接子平面，包一层会把整个场景压成一张卡片再转 |
 | 章节、字幕、标注写在取景窗外 | 把字幕放进舞台层，跟着镜头一起放大 | 取景窗外用成片像素；要跟住舞台上的一点用 `cam.toScreen(x, y)` | 字幕跟着推近、震动，读不清 |
 | 舞台里不放 `blur` / `mask` / `grade` / `glass` 再推很近 | `shot({ zoom: 16 })` 推向一张带 `mask` 的卡片 | 带这些效果的元素放到舞台外，或者只在 zoom 不大的时候用；调色写在取景窗那层上 | 离屏画布按放大后的尺寸分配，16 倍时单帧多出约 400ms |
 | 动画文字不换行 | 让 `p` 自动折行 | `text()` 默认 `white-space:nowrap` | 字距、字号变化时整段重排，画面跳动 |
@@ -272,6 +273,7 @@ npm run mfl -- render comp.ts                 # 成片
 - `box(style, ...children)`：flex 容器。
 - `fx({ width, height, x, y, name }, draw)`：绘图层。
 - `shot({ width, height, stage, x, y, zoom, rotate, shakeX, shakeY, cover })`：镜头参数，纯函数。返回 `view`（写在取景窗那层）、`stage`（舞台层的宽高，有旋转时带 `rotate` 和 `origin`）、实际的 `zoom` 和 `toScreen(x, y)`。`(x, y)` 是舞台上要对准的点，落在取景窗中心；`shakeX`、`shakeY` 是成片像素；默认把 `zoom` 抬到刚好盖满舞台，`cover: false` 关掉。取景窗多大、放在哪、几个窗口取同一个舞台，都由调用方自己写。
+- `shot3d({ width, height, x, y, z, zoom, distance, yaw, pitch, rotate, from, fov, lens, perspective, aperture, focus, maxBlur })`：三维镜头，`shot()` 的透视版，纯函数。`x`、`y`、`zoom`、`rotate` 和 `shot()` 同义，`distance` 直接给机位到对准点的距离（推轨，写了就不看 `zoom`），`yaw`、`pitch` 是机位绕对准点转的角度，`from` 直接给机位；`lens` 是全画幅等效焦距（毫米），`aperture` 打开景深，`focus` 是对焦距离或一个世界坐标，默认对准点。返回 `scene(...objects)`（三维取景窗那层）、`place(pose, ...children)` / `pose(pose)`（世界姿态 → 那一层直接子元素的属性）、`toScreen(x, y, z)`、`project(x, y, z)` 和 `blurAt(depth)`。物体必须是 `cam.scene` 的直接子元素；震屏、调色写在外面一层 `shot()` 的取景窗上。
 - `roll({ value, cell, size, axis, align }, items)`：滚动窗口。
 - `reveal({ progress, width, height, direction, feather }, ...children)`：蒙版擦除。
 - `typewriter(tokens, shown, style)`：打字机。

@@ -334,7 +334,50 @@ const targets = sampleTextPoints('<draw>', { font: font(300, 800), width: W, hei
 
 ## 3D 投影
 
-在 2D canvas 里做点云：先旋转，再做透视除法，最后按深度排序，远处的点更暗、更小。
+**三维镜头。** `shot3d()` 是 `shot()` 的透视版：`x`、`y`（再加 `z`）是对准的世界坐标，`zoom`、`rotate` 和 `shot()` 同义，多出机位绕对准点转的 `yaw`、`pitch`，以及视角 `fov`。`yaw`、`pitch` 都是 0 时，`z = 0` 上的内容和同参数的 `shot()` 一模一样，所以二维的推拉镜头可以直接加上环绕。世界坐标和舞台坐标同一套：x 向右，y 向下，z 朝观众。
+
+```ts
+const cam = shot3d({ width: W, height: H, x: 980, y: 640, yaw, pitch, zoom })
+cam.scene(
+  cam.place({ x: 980, y: 780, rotateX: 90, width: 1500, height: 1300 }, h('box', { x: 0, y: 0, width: 1500, height: 1300, depth: 16, fill: '#232733' })),   // 地板
+  cam.place({ x: 700, y: 672, z: -320, width: 300, height: 200 }, card),                                                                                 // 卡片
+  cam.place({ x: 1420, y: 702, z: -160, width: 140, height: 140 }, h('sphere', { cx: 70, cy: 70, r: 70, fill: '#f2b84b' })),                           // 球
+)
+```
+
+- `cam.scene(...)` 就是三维取景窗那层（宽高和 `perspective`），等于 `h('layer', cam.layer, ...)`，另外负责景深的修正；
+- 镜头不是一层包住场景的 layer。flexlayer 只投影 `perspective` 层的**直接子元素**，嵌套的平面会先画进父平面；所以 `cam.place` 把镜头变换乘进每个物体，算出这一层的 `x`、`y`、`z`、`rotateX`、`rotateY`、`rotate`、`origin`；
+- 物体的 `x`、`y`、`z` 是它盒子中心的世界坐标，`rotateX`、`rotateY`、`rotate` 是它在世界里的朝向，顺序和 flexlayer 一层上的一样。写上 `width`、`height`：深度会一部分挪到 `origin` 上，贴地的平面在低机位下不会因为 `z` 太大被判成 `behind-camera`；
+- 有 `box`、`sphere`、`extrude`、`model` 时，这一层是一台带深度缓冲的场景，地板、卡片、球互相遮挡，主光投影子。只有平面时按平面中心的深度排序，大地板最好用一个薄 `box`；
+- `billboard: true` 的物体始终正对镜头，标签、粒子贴片用；
+- 震屏、调色、暗角写在外面一层 `shot()` 的取景窗上，三维取景窗是它的舞台；字幕、标注写在取景窗外，用 `cam.toScreen(x, y, z)` 跟住三维里的点；
+- `draw` 里的点云、粒子用 `cam.project(x, y, z)`，返回屏幕坐标、这一点的缩放和深度，和平面、网格共用同一台相机。它们画在一张二维 `fx` 上，不进深度缓冲，前后关系要自己排。
+
+**镜头焦距。** `lens` 按全画幅等效写毫米数，换算成竖直视角：24 广角（约 53°）、35 人文（约 38°）、50 标准（约 27°）、85 人像（约 16°）、200 长焦（约 7°）。`fov` 直接写视角，`perspective` 直接写视距，优先级 `perspective` > `lens` > `fov`。
+
+- 同样的 `zoom` 下，广角的机位贴得更近，近大远小更夸张；长焦退得远，前后景压在一起；
+- 滑动变焦：`zoom` 不动，只给 `lens` 做动画。`zoom` 管的是对准点那张平面上的大小，所以对准点上的东西大小不变，机位自己前后移，背景跟着伸缩；
+- 投影是小孔成像，直线永远是直的。鱼眼、桶形畸变不在镜头里，要做就在取景窗那层上加一道二维的扭曲后期。
+
+**景深。** `aperture` 是无限远处的模糊半径（成片像素），`focus` 是对焦距离，或者直接给一个世界坐标；默认对准点是清楚的：
+
+```ts
+const cam = shot3d({ width: W, height: H, lens: 35, aperture: 10, focus: [x, y, z], yaw, pitch })
+cam.scene(
+  cam.place({ …floor, sharp: true }, floor),   // 跨很多深度的大平面整张糊会很假，关掉
+  ...cards.map((c) => cam.place(c, card(c))),  // 卡片按自己中心的深度糊
+)
+```
+
+- 模糊半径 = `aperture × |深度 − 对焦距离| / 深度`，上限 `maxBlur`（默认 `aperture × 3`）。离焦越远越糊，比焦点近一半的地方就有 `aperture` 那么糊；
+- 拉焦：`focus` 在两个世界坐标之间插值；
+- 卡片要用 `cam.scene()` 组装，不要自己写 `h('layer', cam.layer, …)`：flexlayer 0.2.30 在三维平面上的 `blur` 只剩 1/4（有网格的场景里是 1/2），`scene()` 负责乘回来；
+- 一张平面整张一个模糊值，按它中心的深度算。网格（`box`、`sphere`）上的 `blur` 被 flexlayer 忽略，网格目前总是清楚的；
+- `draw` 里的点按 `cam.blurAt(p.depth)` 摊成更大、更淡的光斑。
+
+见 `examples/orbit`。
+
+**手写投影。** 不需要和平面、网格对齐时，也可以在 2D canvas 里自己做点云：先旋转，再做透视除法，最后按深度排序，远处的点更暗、更小。
 
 ```ts
 const cy = Math.cos(yaw), sy = Math.sin(yaw), cx = Math.cos(pitch), sx = Math.sin(pitch)
