@@ -27,7 +27,7 @@ motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做
 | 17 | P2 | `canvas.create` 的字带上原文位置；竖排按列给 | 部分：字带上所在 span 的 `id` | `examples/ink/page.ts` 的 `cells()` 已改成按 id 取；`type.ts` 竖排仍按 `x` 分列 |
 | 18 | P2 | 被取景窗裁开的文字和 `outside-safe` | 新增 | `examples/ink/page.ts`、`showreel` 卡片上的 `expect` |
 | 19 | P2 | 三维镜头：`behind-camera` 的口径、嵌套平面复合姿态、斜平面上的 `text-overlap` | 新增 | `src/shot3d.ts` 的 `pose()`、`examples/orbit` 卡片上的 `expect` |
-| 20 | P1 | `perspective` 改成多值的镜头属性：焦距、对准点、机位、主点偏移 | 新增 | `src/shot3d.ts` 的 `pose()` / `place()` 整段；包含第 19 项的 `behind-camera` 口径 |
+| 20 | P1 | 新增 `camera` 属性：焦距、对准点、机位、主点偏移；`perspective` 留作只有焦距的简写 | 新增 | `src/shot3d.ts` 的 `pose()` / `place()` 整段；包含第 19 项的 `behind-camera` 口径 |
 
 ---
 
@@ -259,7 +259,7 @@ motionflexlayer 的 `shot3d()` 把机位变换乘进每个物体，算出 `persp
 
 **验收。** `shot3d({ pitch: 4 })` 看一块 `rotateX: 90` 的地板，不写宽高时不报 `behind-camera`；一层 `preserve-3d` 的 layer 里放两张 `z` 不同的卡片，外层再转 `rotateY`，两张卡片的 `quad` 和直接写成 `perspective` 层子元素时一致。
 
-## 20. `perspective` 改成多值的镜头属性（P1，新增）
+## 20. 新增 `camera` 属性：一整台三维镜头（P1，新增）
 
 **问题。** `perspective` 现在只有一个数：观众到 `z = 0` 平面的距离，灭点固定在盒子中心，机位固定正对盒子。焦距、主点、机位、朝向都是同一台镜头的属性，却只能写出第一个，剩下的要由 motionflexlayer 乘进每个物体（第 19 项）。后果是：
 
@@ -267,16 +267,30 @@ motionflexlayer 的 `shot3d()` 把机位变换乘进每个物体，算出 `persp
 - 拆分要靠 `origin` 绕开 `behind-camera` 的误报，报告里的 `box` 也不再是物体的世界位置；
 - 离轴（主点偏移、移轴）做不了。
 
-二维已经有对应的写法：`view="x y w h"` 把一整台二维镜头写在取景窗那层上，子元素照常用舞台坐标。三维应当一样：镜头写在 `perspective` 那层上，直接子元素写世界姿态。
+二维已经有对应的写法：`view="x y w h"` 把一整台二维镜头写在取景窗那层上，子元素照常用舞台坐标。三维应当一样：一台镜头写在取景窗那层上，直接子元素写世界姿态。
 
-**建议。** `perspective` 接受多段，写法和 `grade` 一样用逗号分段、每段一个名字。只写一个数时含义不变，现有文件不用改：
+**名字。** 叫 `camera`，不在 `perspective` 上加段：CSS 里的 `perspective` 只是视距，装进机位、朝向以后名不副实。
+
+- `perspective="1484"` 保留，是 `camera="focal 1484"` 的简写，现有文件不用改；
+- 同一层同时写 `camera` 和 `perspective` 报 `invalid-attr`，以 `camera` 为准；
+- 和 `view` 一样只写在 `layer` 上；和 `view` 仍然不能写在同一层。
+
+**值的两种写法。** 和 `data` 的先例一样：程序里传对象，`.layer` 文件里写字符串。区别是 `camera` 的字段是固定的，文件里不用 JSON，用 `grade` 那样逗号分段、每段一个名字的短写法：
 
 ```html
-<layer width="1920" height="1080" perspective="1484">                                        <!-- 现在的写法：视距 1484，机位正对盒子中心 -->
-<layer width="1920" height="1080" perspective="fov 40, at 980 640 0, orbit 30 15, zoom 1.2">  <!-- 环绕机位 -->
-<layer width="1920" height="1080" perspective="fov 40, at 980 640 0, from 1400 300 900">      <!-- 给出机位 -->
-<layer width="1920" height="1080" perspective="1484, shift 0 -120">                           <!-- 离轴：灭点上移 120px -->
+<layer width="1920" height="1080" camera="fov 40, at 980 640 0, orbit 30 15, zoom 1.2">  <!-- 环绕机位 -->
+<layer width="1920" height="1080" camera="fov 40, at 980 640 0, from 1400 300 900">      <!-- 给出机位 -->
+<layer width="1920" height="1080" camera="focal 1484, shift 0 -120">                     <!-- 离轴：灭点上移 120px -->
 ```
+
+```ts
+h('layer', { width: 1920, height: 1080, camera: { fov: 40, at: [980, 640, 0], orbit: [30, 15], zoom: 1.2 } })
+```
+
+- 对象的键和段名相同，多个数的段是数组；
+- 文件里不用 JSON 的原因：`view`、`origin`、`glow`、`grade` 都是这种短写法，模型和人手写时不用处理引号嵌套（JSON 只能放进单引号属性）；解析失败可以按段报 `invalid-attr`，`hint` 指出是哪一段；逐帧 diff 也只动变了的那几个数；
+- `--emit` 把对象写回短写法，数保留到 0.001；
+- 对象里有未知的键、数组长度不对，报 `invalid-attr`，和文件里写错一段同一个码。
 
 | 段 | 含义 | 缺省 |
 | --- | --- | --- |
@@ -297,25 +311,27 @@ motionflexlayer 的 `shot3d()` 把机位变换乘进每个物体，算出 `persp
 - 投影前先乘 `V`：平面用 `V · posePoint`，网格用 `V · poseMatrix`（嵌套层照旧沿父链乘），灭点加上 `shift`；
 - 深度排序、`behind-camera`、`quad`、投影后的 `ink`、`overflow-canvas`、屏幕字号，都按乘过 `V` 之后的坐标算。顺带解决第 19 项的 `behind-camera` 口径；
 - 镜头不在默认机位时，没有自己三维姿态的子元素也要走投影，不能再走二维绘制；
-- 和 `view` 仍然不能写在同一层。震屏、调色写在外面的 `view` 取景窗上，三维取景窗是它的舞台。
+- 震屏、调色写在外面的 `view` 取景窗上，三维取景窗是它的舞台。
 
 **改动面。** 投影都经过 `posePoint`、`poseMatrix`、`planeDepth` 三个函数，镜头矩阵乘在它们前面即可：
 
-- `layout.ts`：解析 `perspective` 的多段写法，存成焦距、`V`、`shift`；
+- `layout.ts`：解析 `camera`（字符串或对象）和 `perspective` 简写，存成同一份：焦距、`V`、`shift`。后面的代码只认这一份，`layer.perspective` 继续表示焦距；
 - `perspective.ts`：从这些段算出 `V`，给上面三个函数加一个乘 `V` 的版本；
 - `paint.ts` 的 `paintPerspectiveChildren`、`mesh.ts` 的 `renderMeshLayer`、`report.ts` 的平面投影和 `meshView`、`perspectiveIssues`：改用乘过 `V` 的版本，灭点加 `shift`；
-- `schema.ts`、SPEC：登记新写法。`docs/proposals/3D.md` 里“不要另起 `camera`”“不做独立相机”两条要改：镜头仍然只是 `perspective` 这一个属性，不加标签；变的是它能写出完整的一台镜头。
+- `schema.ts`、SPEC、`h()` 的属性类型：登记 `camera`，像 `data` 一样放行对象值；`--emit` 写回短写法；
+- `docs/proposals/3D.md` 里“不要另起 `camera`”“不做独立相机”两条要改：仍然不加标签，镜头是取景窗 `layer` 上的一个属性，和 `view` 同一个位置。
 
 **motionflexlayer 改完后。**
 
-- `shot3d()` 和 `shot()` 完全对称：只算一个字符串，`cam.layer.perspective` 就是上面的多段写法；
+- `shot3d()` 和 `shot()` 完全对称：只算镜头参数，`cam.layer` 变成 `{ width, height, camera: { … } }`，对象直接交给 flexlayer，不用自己拼字符串；React 里 `<layer {...cam.layer}>` 照旧；
 - 物体直接用 `place()` 写世界姿态（`PlaceOptions` 加 `rotateX`、`rotateY`、`z`），`cam.place()`、`cam.pose()` 以及里面的欧拉角拆分、`origin` 分摊都删掉；
 - `toScreen`、`project` 保留，给镜头外的标注和 `draw` 里的点云用，公式和 flexlayer 同一套。
 
 **验收。**
 
-- 只写一个数的 `perspective`，现有测试的像素和报告不变；
-- `perspective="fov 40, at 980 640 0, orbit 35 18, zoom 0.8"` 下，世界姿态写的卡片，报告里的 `quad` 和 motionflexlayer 现在 `shot3d().pose()` 拆出来的结果一致（误差 0.6px 以内，`test/shot3d.spec.ts` 的同一组用例）；
+- 只写一个数的 `perspective`，现有测试的像素和报告不变；`camera="focal 1484"` 和 `perspective="1484"` 逐像素一致；
+- `camera` 写字符串和写等价的对象，报告和像素一致；`--emit` 出来的字符串再读回去，结果不变；
+- `camera="fov 40, at 980 640 0, orbit 35 18, zoom 0.8"` 下，世界姿态写的卡片，报告里的 `quad` 和 motionflexlayer 现在 `shot3d().pose()` 拆出来的结果一致（误差 0.6px 以内，`test/shot3d.spec.ts` 的同一组用例）；
 - `shift 0 -120` 时，对准点落在取景窗中心上方 120px；
 - 低机位（`orbit 0 4`）看一块 `rotateX="90"` 的地板，不报 `behind-camera`。
 
