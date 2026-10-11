@@ -273,7 +273,7 @@ npm run mfl -- render comp.ts                 # 成片
 - `box(style, ...children)`：flex 容器。
 - `fx({ width, height, x, y, name }, draw)`：绘图层。
 - `shot({ width, height, stage, x, y, zoom, rotate, shakeX, shakeY, cover })`：镜头参数，纯函数。返回 `view`（写在取景窗那层）、`stage`（舞台层的宽高，有旋转时带 `rotate` 和 `origin`）、实际的 `zoom` 和 `toScreen(x, y)`。`(x, y)` 是舞台上要对准的点，落在取景窗中心；`shakeX`、`shakeY` 是成片像素；默认把 `zoom` 抬到刚好盖满舞台，`cover: false` 关掉。取景窗多大、放在哪、几个窗口取同一个舞台，都由调用方自己写。
-- `shot3d({ width, height, x, y, z, zoom, yaw, pitch, rotate, from, fov, lens, perspective, aperture, focus, maxBlur })`：三维镜头，`shot()` 的透视版，纯函数。`x`、`y`、`zoom`、`rotate` 和 `shot()` 同义，`yaw`、`pitch` 是机位绕对准点转的角度，`from` 直接给机位；`lens` 是全画幅等效焦距（毫米），`aperture` 打开景深，`focus` 是对焦距离或一个世界坐标，默认对准点。返回 `scene(...objects)`（三维取景窗那层）、`place(pose, ...children)` / `pose(pose)`（世界姿态 → 那一层直接子元素的属性）、`toScreen(x, y, z)`、`project(x, y, z)` 和 `blurAt(depth)`。物体必须是 `cam.scene` 的直接子元素；震屏、调色写在外面一层 `shot()` 的取景窗上。
+- `shot3d({ width, height, x, y, z, zoom, distance, yaw, pitch, rotate, from, fov, lens, perspective, aperture, focus, maxBlur })`：三维镜头，`shot()` 的透视版，纯函数。`x`、`y`、`zoom`、`rotate` 和 `shot()` 同义，`distance` 直接给机位到对准点的距离（推轨，写了就不看 `zoom`），`yaw`、`pitch` 是机位绕对准点转的角度，`from` 直接给机位；`lens` 是全画幅等效焦距（毫米），`aperture` 打开景深，`focus` 是对焦距离或一个世界坐标，默认对准点。返回 `scene(...objects)`（三维取景窗那层）、`place(pose, ...children)` / `pose(pose)`（世界姿态 → 那一层直接子元素的属性）、`toScreen(x, y, z)`、`project(x, y, z)` 和 `blurAt(depth)`。物体必须是 `cam.scene` 的直接子元素；震屏、调色写在外面一层 `shot()` 的取景窗上。
 - `roll({ value, cell, size, axis, align }, items)`：滚动窗口。
 - `reveal({ progress, width, height, direction, feather }, ...children)`：蒙版擦除。
 - `typewriter(tokens, shown, style)`：打字机。

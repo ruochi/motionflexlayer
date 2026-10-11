@@ -74,6 +74,7 @@ describe('shot3d', () => {
     expect(fromEye.yaw).toBeCloseTo(35, 6)
     expect(fromEye.pitch).toBeCloseTo(20, 6)
     expect(fromEye.zoom).toBeCloseTo(0.8, 6)
+    expect(shot3d({ width: W, height: H, distance: orbit.distance, zoom: 3 }).zoom).toBeCloseTo(0.8, 6)
     const a = orbit.toScreen(800, 100, 250)!
     const b = fromEye.toScreen(800, 100, 250)!
     expect(b[0]).toBeCloseTo(a[0], 6)

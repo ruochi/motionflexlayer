@@ -68,6 +68,8 @@ export type Shot3DOptions = {
    * 靠机位前后移动做到（dolly），所以前后景的透视会跟着变。
    */
   zoom?: number
+  /** 机位到对准点的距离，像素。直接给推轨的距离，写了就不看 zoom（zoom = 视距 / distance）。 */
+  distance?: number
   /** 机位绕对准点水平转，度。正数机位往右绕，画面里的东西往左转。 */
   yaw?: number
   /** 机位绕对准点抬高，度。正数从上往下看。 */
@@ -192,7 +194,7 @@ export function shot3d(opts: Shot3DOptions): Shot3D {
   const target: Vec3 = [opts.x ?? W / 2, opts.y ?? H / 2, opts.z ?? 0]
   let yaw = opts.yaw ?? 0
   let pitch = opts.pitch ?? 0
-  let zoom = opts.zoom ?? 1
+  let zoom = opts.distance != null ? P / opts.distance : (opts.zoom ?? 1)
   if (opts.from) {
     const dx = opts.from[0] - target[0]
     const dy = opts.from[1] - target[1]
