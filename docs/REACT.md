@@ -118,7 +118,7 @@ const cam = shot({ width: 1920, height: 1080, x, y, zoom, shakeX })
 </layer>
 ```
 
-三维镜头同样没有组件：`shot3d()` 的 `layer` 展开在三维取景窗上，`pose()` 展开在每个物体那层上。物体必须是取景窗的直接子元素，其它 layer 属性照常写在后面：
+三维镜头同样没有组件：`shot3d()` 的 `layer` 展开在三维取景窗上（带 `camera`）。没有旋转的物体可以把 `pose()` 展开在自己那层上。有 `rotateX`、`rotateY` 或 `rotate` 时用 `place()`：flexlayer 的 `z` 发生在旋转之前，`place()` 会在外面加一层 `preserve-3d` 放位置，旋转写在里面，中心才停在给出的世界坐标上。
 
 ```tsx
 const cam = shot3d({ width: 1920, height: 1080, x, y, zoom, yaw, pitch })
@@ -129,7 +129,7 @@ const cam = shot3d({ width: 1920, height: 1080, x, y, zoom, yaw, pitch })
 </layer>
 ```
 
-用了景深（`aperture`）时，JSX 里展开 `cam.layer` 拿不到 `cam.scene()` 对 flexlayer `blur` 倍数的修正，三维平面上的模糊会偏弱（只有平面时 1/4，有网格时 1/2）。需要景深的镜头先用核心 API 的 `cam.scene()` 组装，再用 `<Raw node={…}>` 放进来。
+景深写在 `camera` 上，展开 `cam.layer` 和 `cam.scene()` 是同一台镜头。
 
 `style` 可以是字符串，也可以是对象。对象的键用驼峰写法，数字会自动加 `px`。`opacity`、`fontWeight`、`lineHeight`、`zIndex`、`flex*`、`order` 这几个不加单位。
 

@@ -1,6 +1,8 @@
 import { h, type FvgNode } from 'flexlayer'
 import { clamp, r2, type Vec3 } from './math.js'
-import { originAttr, type Child } from './nodes.js'
+import type { Child } from './nodes.js'
+
+const MESH_TAGS = new Set(['sphere', 'box', 'cylinder', 'torus', 'tube', 'extrude', 'model'])
 
 type Mat3 = [number, number, number, number, number, number, number, number, number]
 
@@ -33,14 +35,15 @@ function mul(a: Mat3, b: Mat3): Mat3 {
   return o
 }
 
+function transpose(m: Mat3): Mat3 {
+  return [m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]]
+}
+
 const apply = (m: Mat3, x: number, y: number, z: number): Vec3 => [
   m[0] * x + m[1] * y + m[2] * z,
   m[3] * x + m[4] * y + m[5] * z,
   m[6] * x + m[7] * y + m[8] * z,
 ]
-
-/** flexlayer 一层上的旋转顺序：先 rotateX，再 rotateY，再 rotate。 */
-const layerRotation = (rx: number, ry: number, rz: number) => mul(rotZ(rz), mul(rotY(ry), rotX(rx)))
 
 /** 拆回 rotateX、rotateY、rotate（度）。rotateY 落在 ±90 附近时 rotate 记 0。 */
 function eulerOf(m: Mat3): [number, number, number] {
@@ -55,8 +58,26 @@ const r3 = (v: number) => {
   return Object.is(n, -0) ? 0 : n
 }
 
+/**
+ * 写在取景层上的 `camera`。字段和 flexlayer 的段名相同，`h()` 原样传过去。
+ * 没写的字段用 flexlayer 的缺省：对准盒子中心、机位正对、距离等于焦距。
+ */
+export type CameraSpec = {
+  focal?: number
+  fov?: number
+  lens?: number
+  at?: [number, number, number]
+  orbit?: [number, number]
+  roll?: number
+  distance?: number
+  from?: [number, number, number]
+  aperture?: number
+  focus?: number | [number, number, number]
+  max?: number
+}
+
 export type Shot3DOptions = {
-  /** 三维取景窗，成片像素。写 `perspective` 的那一层就是这么大，灭点在它中心。 */
+  /** 三维取景窗，成片像素。写 `camera` 的那一层就是这么大，灭点在它中心。 */
   width: number
   height: number
   /** 对准的世界坐标，落在取景窗中心。默认 (width/2, height/2, 0)。 */
@@ -65,7 +86,7 @@ export type Shot3DOptions = {
   z?: number
   /**
    * 推近倍数，和 `shot()` 同义：对准点所在、正对镜头的那张平面上，1 世界像素是 zoom 成片像素。
-   * 靠机位前后移动做到（dolly），所以前后景的透视会跟着变。
+   * 靠机位前后移动做到（dolly），所以前后景的透视会跟着变。写了 `distance` 就不看这个。
    */
   zoom?: number
   /** 机位到对准点的距离，像素。直接给推轨的距离，写了就不看 zoom（zoom = 视距 / distance）。 */
@@ -74,9 +95,9 @@ export type Shot3DOptions = {
   yaw?: number
   /** 机位绕对准点抬高，度。正数从上往下看。 */
   pitch?: number
-  /** 舞台绕对准点转，度，和 `shot()` 的 rotate 同义。 */
+  /** 镜头绕视线转，度，和 `shot()` 的 rotate 同义。正数时画面里的内容顺时针转。 */
   rotate?: number
-  /** 机位的世界坐标。写了就由它和对准点算出 yaw、pitch、zoom，三者不再看。 */
+  /** 机位的世界坐标。写了就由它和对准点算出 yaw、pitch、距离，三者不再看。 */
   from?: Vec3
   /** 竖直视角，度。默认 40。 */
   fov?: number
@@ -86,7 +107,7 @@ export type Shot3DOptions = {
   perspective?: number
   /**
    * 景深：无限远处的模糊半径，成片像素。不写就没有景深。
-   * 离焦平面越远越糊：半径 = aperture × |深度 − 对焦距离| / 深度，所以对焦距离一半处也是 aperture，更近的更糊。
+   * 半径 = aperture × |深度 − 对焦距离| / 深度，由 flexlayer 按每个像素算，近处的糊边盖到远处。
    */
   aperture?: number
   /** 对焦距离，像素，从机位沿视线量；或者一个世界坐标，对到那一点所在的深度。默认对准点。 */
@@ -94,21 +115,6 @@ export type Shot3DOptions = {
   /** 模糊半径的上限，成片像素。默认 aperture × 3。 */
   maxBlur?: number
 }
-
-/**
- * flexlayer 0.2.30 按超采样倍数画带三维姿态的平面，blur 半径却没乘这个倍数：
- * 只有平面时屏幕上剩 1/4，场景里有网格时剩 1/2。见 FLEXLAYER-CHANGES 第 19 项，修好后删掉。
- */
-const PLANE_BLUR_FIX = { planes: 4, meshes: 2 }
-const MESH_TAGS = new Set(['sphere', 'box', 'extrude', 'model'])
-
-function hasMesh(node: FvgNode): boolean {
-  if (MESH_TAGS.has(node.tag)) return true
-  if (node.tag === 'layer' && node.attrs.perspective != null) return false
-  return node.children.some((c) => typeof c !== 'string' && hasMesh(c))
-}
-
-const isPosed = (a: Record<string, string>) => [a.z, a.rotateX, a.rotateY].some((v) => v != null && Number(v) !== 0)
 
 export type Pose3D = {
   /** 这一层盒子中心的世界坐标。 */
@@ -123,7 +129,7 @@ export type Pose3D = {
   scale?: number
   /** 始终正对镜头，只保留 rotate。标签、粒子贴片用。 */
   billboard?: boolean
-  /** 不吃景深。地板这类跨很多深度的大平面整张糊会很假，可以关掉。 */
+  /** 不吃景深。地板这类跨很多深度的大表面整张跟着糊会很假，可以关掉。 */
   sharp?: boolean
   opacity?: number
   width?: number
@@ -142,8 +148,9 @@ export type Projected = {
 }
 
 export type Shot3D = {
-  /** 写在三维取景窗那层：宽高和 `perspective`。物体都要是这一层的直接子元素。 */
-  layer: { width: number; height: number; perspective: number }
+  /** 写在三维取景窗那层：宽高和 `camera`。物体写世界姿态，可以是直接子元素，也可以放在 `preserve-3d` 里。 */
+  layer: { width: number; height: number; camera: CameraSpec }
+  /** 算出来的视距，像素。 */
   perspective: number
   /** 机位到对准点的距离。 */
   distance: number
@@ -162,35 +169,43 @@ export type Shot3D = {
   focus: number
   /** 这一深度上的景深模糊半径，成片像素。没写 aperture 时恒为 0。draw 里的粒子按它糊。 */
   blurAt(depth: number): number
-  /** 世界姿态 → 直接子层的属性。在观众身后返回 null。 */
-  pose(p: Pose3D): Record<string, string | number | undefined> | null
-  /** 把内容按世界姿态摆进镜头，返回 layer。几乎透明或在观众身后时返回 null。 */
-  place(p: Pose3D, ...children: Child[]): FvgNode | null
   /**
-   * 三维取景窗那层：`h('layer', cam.layer, ...objects)`，外加景深要的修正。
-   * 直接子元素上的 blur 按平面局部像素算；用了 aperture 时要用它，不要自己写 `cam.layer`。
+   * 世界姿态 → 层属性。在观众身后返回 null。
+   * `x`、`y`、`z` 是盒子中心。有旋转时不要直接铺开：flexlayer 的 `z` 在旋转之前，中心会跟着转走。
+   * 用 `place()`，它在外面加一层 `preserve-3d` 放位置，旋转写在里面。
    */
+  pose(p: Pose3D): Record<string, string | number | undefined> | null
+  /** 把内容按世界姿态摆进镜头。几乎透明或在观众身后时返回 null。 */
+  place(p: Pose3D, ...children: Child[]): FvgNode | null
+  /** 三维取景窗那层：`h('layer', cam.layer, ...objects)`。 */
   scene(...objects: Child[]): FvgNode
+}
+
+/** 景深开关写在被光栅化的那一层上。包着网格时，网格自己也要带上。 */
+function markSharp(child: Child): Child {
+  if (child == null || child === false || typeof child === 'string' || !MESH_TAGS.has(child.tag)) return child
+  if (child.attrs.sharp != null) return child
+  return { ...child, attrs: { ...child.attrs, sharp: 'true' } }
 }
 
 /**
  * 三维镜头：`shot()` 的透视版。对准点、推近、转都和 `shot()` 同义，多了机位绕对准点的 yaw、pitch 和视角。
  * yaw、pitch 都是 0 且物体在 z = 0 时，画面和同参数的 `shot()` 一样。
  *
- * flexlayer 只给 `perspective` 层的直接子元素做三维投影，嵌套层会先压成一张平面，
- * 所以镜头不能像 `view` 那样包一层舞台，而是把镜头变换乘进每个物体的姿态：
+ * 机位写在取景窗那层的 `camera` 上，物体保持世界姿态：
  *
  * ```ts
  * const cam = shot3d({ width: W, height: H, x, y, zoom, yaw, pitch })
  * cam.scene(cam.place({ x: 400, y: 300, z: -200, rotateY: 30 }, card), ...)
  * ```
  *
+ * 要分组，在中间一层写 `preserve-3d`，子元素仍进这一台镜头。自己再写 `camera` 或 `perspective` 的内层是另一台镜头。
  * 震屏、调色、暗角写在外面一层 `shot()` 的取景窗上；字幕、标注写在取景窗外，用 `toScreen` 跟住三维里的点。
  */
 export function shot3d(opts: Shot3DOptions): Shot3D {
   const { width: W, height: H } = opts
   const fov = opts.lens != null ? (2 * Math.atan(12 / opts.lens)) / RAD : (opts.fov ?? 40)
-  const P = r2(opts.perspective ?? H / 2 / Math.tan((fov * RAD) / 2))
+  const P = opts.perspective ?? H / 2 / Math.tan((fov * RAD) / 2)
   const target: Vec3 = [opts.x ?? W / 2, opts.y ?? H / 2, opts.z ?? 0]
   let yaw = opts.yaw ?? 0
   let pitch = opts.pitch ?? 0
@@ -207,12 +222,25 @@ export function shot3d(opts: Shot3DOptions): Shot3D {
   }
   if (!(zoom > 0)) throw new Error('shot3d 的 zoom 必须大于 0')
   const distance = P / zoom
-  const view = mul(rotZ(opts.rotate ?? 0), mul(rotX(-pitch), rotY(-yaw)))
+  const roll = opts.rotate ?? 0
+  const view = mul(rotZ(roll), mul(rotX(-pitch), rotY(-yaw)))
   const cx = W / 2
   const cy = H / 2
   const cz = P - distance
   const back = apply([view[0], view[3], view[6], view[1], view[4], view[7], view[2], view[5], view[8]], 0, 0, distance)
   const eye: Vec3 = [target[0] + back[0], target[1] + back[1], target[2] + back[2]]
+
+  const camera: CameraSpec = {}
+  if (opts.perspective != null) camera.focal = opts.perspective
+  else if (opts.lens != null) camera.lens = opts.lens
+  else camera.fov = opts.fov ?? 40
+  if (opts.x != null || opts.y != null || opts.z != null) camera.at = [target[0], target[1], target[2]]
+  if (opts.from) camera.from = [opts.from[0], opts.from[1], opts.from[2]]
+  else {
+    if ((opts.yaw ?? 0) !== 0 || (opts.pitch ?? 0) !== 0) camera.orbit = [opts.yaw ?? 0, opts.pitch ?? 0]
+    if (opts.distance != null || (opts.zoom != null && opts.zoom !== 1)) camera.distance = distance
+  }
+  if (roll !== 0) camera.roll = roll
 
   const aperture = opts.aperture ?? 0
   const maxBlur = opts.maxBlur ?? aperture * 3
@@ -222,6 +250,12 @@ export function shot3d(opts: Shot3DOptions): Shot3D {
     return distance - vz
   }
   const focus = opts.focus != null ? focusAt(opts.focus) : distance
+  if (aperture > 0) {
+    camera.aperture = aperture
+    if (typeof opts.focus === 'number') camera.focus = opts.focus
+    else if (opts.focus) camera.focus = [opts.focus[0], opts.focus[1], opts.focus[2]]
+    if (opts.maxBlur != null) camera.max = opts.maxBlur
+  }
   const blurAt = (depth: number): number =>
     aperture > 0 && depth > 0 ? Math.min(maxBlur, (aperture * Math.abs(depth - focus)) / depth) : 0
 
@@ -238,54 +272,38 @@ export function shot3d(opts: Shot3DOptions): Shot3D {
   }
 
   const pose = (p: Pose3D): Record<string, string | number | undefined> | null => {
-    const q = toView(p.x, p.y, p.z ?? 0)
-    if (q[2] >= P * (1 - 1e-3)) return null
-    const r = p.billboard ? rotZ(p.rotate ?? 0) : mul(view, layerRotation(p.rotateX ?? 0, p.rotateY ?? 0, p.rotate ?? 0))
-    const [rx, ry, rz] = eulerOf(r)
+    if (!project(p.x, p.y, p.z ?? 0)) return null
+    let rx = p.rotateX ?? 0
+    let ry = p.rotateY ?? 0
+    let rz = p.rotate ?? 0
+    if (p.billboard) {
+      // 世界旋转先发生，镜头矩阵后乘。要在镜头里只剩绕视线的转，世界旋转取镜头旋转的逆。
+      const facing = eulerOf(mul(transpose(view), rotZ(rz)))
+      rx = facing[0]
+      ry = facing[1]
+      rz = facing[2]
+    }
     const scale = p.scale ?? 1
-    // flexlayer 的支点落在 z = 0，深度只能靠沿法线的 z，或者把支点挪离盒子中心。
-    // 知道宽高时两者按最小范数分摊：贴地的平面不会因为 z 很大被当成在观众身后。
-    let z: number
-    let dx = 0
-    let dy = 0
-    if (p.width != null && p.height != null) {
-      const v0 = r[8]
-      const v1 = scale * r[6]
-      const v2 = scale * r[7]
-      const k = q[2] / (v0 * v0 + v1 * v1 + v2 * v2)
-      z = k * v0
-      dx = k * v1
-      dy = k * v2
-    } else {
-      // 法线几乎躺平时平面是一条线，夹一下避免除以 0。
-      const nz = Math.abs(r[8]) < 1e-4 ? (r[8] < 0 ? -1e-4 : 1e-4) : r[8]
-      z = q[2] / nz
-    }
-    const off = apply(r, scale * dx, scale * dy, z)
-    const zAttr = r2(z)
-    // blur 写在平面局部像素里，投影时跟着放大缩小，所以要除掉这一点的缩放。
-    const coc = p.sharp ? 0 : blurAt(P - q[2])
-    const blur = coc > 0 ? r2(coc / (scale * (P / (P - q[2])))) : 0
-    return {
-      id: p.id,
-      x: r2(q[0] - off[0] + dx),
-      y: r2(q[1] - off[1] + dy),
-      anchor: 'center',
-      width: p.width,
-      height: p.height,
-      origin: dx || dy ? originAttr([p.width! / 2 - dx, p.height! / 2 - dy]) : undefined,
-      z: zAttr || undefined,
-      rotateX: r3(rx) || undefined,
-      rotateY: r3(ry) || undefined,
-      rotate: r3(rz) || undefined,
-      scale: scale !== 1 ? Math.round(scale * 10000) / 10000 : undefined,
-      blur: blur >= 0.3 ? blur : undefined,
-      ...p.attrs,
-    }
+    const attrs: Record<string, string | number | undefined> = { x: r2(p.x), y: r2(p.y), anchor: 'center' }
+    if (p.id != null) attrs.id = p.id
+    if (p.width != null) attrs.width = p.width
+    if (p.height != null) attrs.height = p.height
+    if (p.z) attrs.z = r2(p.z)
+    const ax = r3(rx)
+    const ay = r3(ry)
+    const az = r3(rz)
+    if (ax) attrs.rotateX = ax
+    if (ay) attrs.rotateY = ay
+    if (az) attrs.rotate = az
+    if (scale !== 1) attrs.scale = Math.round(scale * 10000) / 10000
+    if (p.sharp) attrs.sharp = 'true'
+    return { ...attrs, ...p.attrs }
   }
 
+  const layer = { width: W, height: H, camera }
+
   return {
-    layer: { width: W, height: H, perspective: P },
+    layer,
     perspective: P,
     distance,
     zoom,
@@ -306,19 +324,34 @@ export function shot3d(opts: Shot3DOptions): Shot3D {
       if (opacity <= 0.002) return null
       const attrs = pose(p)
       if (!attrs) return null
+      const kids = p.sharp ? children.map(markSharp) : children
+      const spins = attrs.rotateX != null || attrs.rotateY != null || attrs.rotate != null || (attrs.scale != null && Number(attrs.scale) !== 1)
+      if (!spins) {
+        if (opacity < 1) attrs.opacity = r2(clamp(opacity) * 1000) / 1000
+        return h('layer', attrs, ...kids)
+      }
+      // z 写在旋转之前，中心会偏离。位置放在外层，旋转放在内层，中心才停在给出的世界坐标上。
       if (opacity < 1) attrs.opacity = r2(clamp(opacity) * 1000) / 1000
-      return h('layer', attrs, ...children)
+      const inner: Record<string, string | number | undefined> = {
+        id: attrs.id,
+        width: attrs.width,
+        height: attrs.height,
+        rotateX: attrs.rotateX,
+        rotateY: attrs.rotateY,
+        rotate: attrs.rotate,
+        scale: attrs.scale,
+        sharp: attrs.sharp,
+        opacity: attrs.opacity,
+        ...p.attrs,
+      }
+      return h(
+        'layer',
+        { x: attrs.x, y: attrs.y, z: attrs.z, anchor: 'center', width: attrs.width, height: attrs.height, 'preserve-3d': 'true' },
+        h('layer', inner, ...kids),
+      )
     },
     scene(...objects) {
-      const root = h('layer', { width: W, height: H, perspective: P }, ...objects)
-      // 有网格时所有平面都进深度缓冲那条路；只有平面时，没有三维姿态的仍按二维画，不用修。
-      const meshes = root.children.some((c) => typeof c !== 'string' && hasMesh(c))
-      const fix = meshes ? PLANE_BLUR_FIX.meshes : PLANE_BLUR_FIX.planes
-      root.children = root.children.map((c) => {
-        if (typeof c === 'string' || c.attrs.blur == null || (!meshes && !isPosed(c.attrs))) return c
-        return { ...c, attrs: { ...c.attrs, blur: String(r2(Number(c.attrs.blur) * fix)) } }
-      })
-      return root
+      return h('layer', layer, ...objects)
     },
   }
 }

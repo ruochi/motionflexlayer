@@ -74,6 +74,9 @@ describe('shot3d', () => {
     expect(fromEye.yaw).toBeCloseTo(35, 6)
     expect(fromEye.pitch).toBeCloseTo(20, 6)
     expect(fromEye.zoom).toBeCloseTo(0.8, 6)
+    expect(fromEye.layer.camera.from).toEqual(orbit.eye)
+    expect(fromEye.layer.camera.orbit).toBeUndefined()
+    expect(fromEye.layer.camera.distance).toBeUndefined()
     expect(shot3d({ width: W, height: H, distance: orbit.distance, zoom: 3 }).zoom).toBeCloseTo(0.8, 6)
     const a = orbit.toScreen(800, 100, 250)!
     const b = fromEye.toScreen(800, 100, 250)!
@@ -103,11 +106,13 @@ describe('shot3d', () => {
     }
   })
 
-  it('低机位看地板：深度分给支点，z 不会大到被当成在观众身后', async () => {
+  it('低机位看地板：世界姿态原样写上，不报 behind-camera', async () => {
     const cam = shot3d({ width: W, height: H, y: 400, pitch: 4, zoom: 1.2 })
     const floor = { x: 640, y: 560, z: 0, rotateX: 90 }
     const attrs = cam.pose({ ...floor, width: 1600, height: 1400 })!
-    expect(Math.abs(Number(attrs.z ?? 0))).toBeLessThan(cam.perspective)
+    expect(attrs.rotateX).toBe(90)
+    expect(attrs.z).toBeUndefined()
+    expect(attrs.origin).toBeUndefined()
     const { quad, issues } = await reportedQuad(cam, floor, 1600, 1400)
     expectQuad(cam, quad, worldCorners(floor, 1600, 1400))
     expect(issues).not.toContain('behind-camera')
@@ -129,14 +134,16 @@ describe('shot3d', () => {
     expect(shot3d({ width: W, height: H, lens: 50, perspective: 900 }).perspective).toBe(900)
   })
 
-  it('景深默认对在对准点；也能对到一个世界坐标；sharp 的物体不糊', () => {
+  it('景深写在 camera 上，默认对在对准点；sharp 记在物体上', () => {
     const cam = shot3d({ width: W, height: H, yaw: 30, aperture: 10 })
     expect(cam.focus).toBeCloseTo(cam.distance, 6)
+    expect(cam.layer.camera.aperture).toBe(10)
+    expect(cam.layer.camera.focus).toBeUndefined()
     expect(cam.pose({ x: W / 2, y: H / 2, width: 100, height: 100 })!.blur).toBeUndefined()
-    expect(Number(cam.pose({ x: W / 2, y: H / 2, z: -2000, width: 100, height: 100 })!.blur)).toBeGreaterThan(0)
-    expect(cam.pose({ x: W / 2, y: H / 2, z: -2000, width: 100, height: 100, sharp: true })!.blur).toBeUndefined()
+    expect(cam.pose({ x: W / 2, y: H / 2, z: -2000, width: 100, height: 100, sharp: true })!.sharp).toBe('true')
     const far = shot3d({ width: W, height: H, yaw: 30, aperture: 10, focus: [W / 2, H / 2, -2000] })
-    expect(far.pose({ x: W / 2, y: H / 2, z: -2000, width: 100, height: 100 })!.blur).toBeUndefined()
+    expect(far.layer.camera.focus).toEqual([W / 2, H / 2, -2000])
+    expect(far.blurAt(far.focus)).toBe(0)
     expect(far.blurAt(far.distance)).toBeGreaterThan(0)
   })
 

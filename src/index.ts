@@ -66,7 +66,7 @@ export {
   type FvgChild,
   type FvgNode,
 } from './nodes.js'
-export { shot3d, type Shot3DOptions, type Shot3D, type Pose3D, type Projected } from './shot3d.js'
+export { shot3d, type Shot3DOptions, type Shot3D, type Pose3D, type Projected, type CameraSpec } from './shot3d.js'
 export {
   font,
   measureGlyphs,

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { DrawFn } from 'flexlayer'
 import type { StyleObject } from '../nodes.js'
+import type { CameraSpec } from '../shot3d.js'
 
 type Num = number | string
 
@@ -54,6 +55,12 @@ type Shape = FvgCommon &
     stroke?: string
     'stroke-width'?: Num
     opacity?: Num
+    depth?: Num
+    tube?: Num
+    round?: string
+    material?: string
+    hidden?: string
+    halo?: Num
   }
 
 type Box4 = { x1?: Num; y1?: Num; x2?: Num; y2?: Num }
@@ -65,12 +72,18 @@ export type LayerProps = Positioned &
     /** 只在根上作为画布底色。 */
     background?: string
     color?: string
-    perspective?: Num
+    perspective?: Num | 'parallel'
+    /** 一整台三维镜头。用 shot3d().layer 展开，或自己写 { fov, at, orbit, distance }。 */
+    camera?: CameraSpec
+    /** 子元素沿父链进入外层这台镜头，不先压成一张平面。 */
+    'preserve-3d'?: boolean | string
+    /** 不吃这一层镜头的景深。 */
+    sharp?: boolean | string
     'font-family'?: string
     safe?: Num
     opacity?: Num
     rotate?: Num
-    /** 只在带 perspective 的父层里生效。三维镜头里用 shot3d().pose() 算。 */
+    /** 绕水平轴转，度。写在物体自己那层上，是世界姿态。 */
     rotateX?: Num
     rotateY?: Num
     z?: Num
@@ -98,6 +111,13 @@ export type FvgIntrinsicElements = {
   use: Positioned & { href?: string; rotate?: Num; scale?: Num }
   rect: Shape
   circle: Shape
+  box: Shape
+  sphere: Shape
+  cylinder: Shape
+  torus: Shape
+  tube: Shape
+  extrude: Shape
+  model: Shape
   ellipse: Shape
   line: FvgCommon & Box4 & { stroke?: string; 'stroke-width'?: Num }
   arrow: FvgCommon & Box4 & { head?: Num; stroke?: string; 'stroke-width'?: Num }

@@ -345,10 +345,10 @@ cam.scene(
 )
 ```
 
-- `cam.scene(...)` 就是三维取景窗那层（宽高和 `perspective`），等于 `h('layer', cam.layer, ...)`，另外负责景深的修正；
-- 镜头不是一层包住场景的 layer。flexlayer 只投影 `perspective` 层的**直接子元素**，嵌套的平面会先画进父平面；所以 `cam.place` 把镜头变换乘进每个物体，算出这一层的 `x`、`y`、`z`、`rotateX`、`rotateY`、`rotate`、`origin`；
-- 物体的 `x`、`y`、`z` 是它盒子中心的世界坐标，`rotateX`、`rotateY`、`rotate` 是它在世界里的朝向，顺序和 flexlayer 一层上的一样。写上 `width`、`height`：深度会一部分挪到 `origin` 上，贴地的平面在低机位下不会因为 `z` 太大被判成 `behind-camera`；
-- 有 `box`、`sphere`、`extrude`、`model` 时，这一层是一台带深度缓冲的场景，地板、卡片、球互相遮挡，主光投影子。只有平面时按平面中心的深度排序，大地板最好用一个薄 `box`；
+- `cam.scene(...)` 就是三维取景窗那层（宽高和 `camera`），等于 `h('layer', cam.layer, ...)`；
+- 机位写在这一层的 `camera` 上。`cam.place` 把世界姿态原样写成 `x`、`y`、`z`、`rotateX`、`rotateY`、`rotate`。要分组，在中间一层写 `preserve-3d`，子元素仍进这一台镜头；没写的话，嵌套的平面会先画进父平面；
+- 物体的 `x`、`y`、`z` 是它盒子中心的世界坐标，`rotateX`、`rotateY`、`rotate` 是它在世界里的朝向，顺序和 flexlayer 一层上的一样；
+- 有 `box`、`sphere`、`cylinder`、`torus`、`tube`、`extrude`、`model` 时，这一层是一台带深度缓冲的场景，地板、卡片、球互相遮挡。只有平面时按平面中心的深度排序，大地板最好用一个薄 `box`；
 - `billboard: true` 的物体始终正对镜头，标签、粒子贴片用；
 - 震屏、调色、暗角写在外面一层 `shot()` 的取景窗上，三维取景窗是它的舞台；字幕、标注写在取景窗外，用 `cam.toScreen(x, y, z)` 跟住三维里的点；
 - `draw` 里的点云、粒子用 `cam.project(x, y, z)`，返回屏幕坐标、这一点的缩放和深度，和平面、网格共用同一台相机。它们画在一张二维 `fx` 上，不进深度缓冲，前后关系要自己排。
@@ -364,16 +364,15 @@ cam.scene(
 ```ts
 const cam = shot3d({ width: W, height: H, lens: 35, aperture: 10, focus: [x, y, z], yaw, pitch })
 cam.scene(
-  cam.place({ …floor, sharp: true }, floor),   // 跨很多深度的大平面整张糊会很假，关掉
-  ...cards.map((c) => cam.place(c, card(c))),  // 卡片按自己中心的深度糊
+  cam.place({ …floor, sharp: true }, floor),   // 跨很多深度的表面整张跟着糊会很假，关掉
+  ...cards.map((c) => cam.place(c, card(c))),  // 卡片按每个像素的深度糊
 )
 ```
 
-- 模糊半径 = `aperture × |深度 − 对焦距离| / 深度`，上限 `maxBlur`（默认 `aperture × 3`）。离焦越远越糊，比焦点近一半的地方就有 `aperture` 那么糊；
+- 模糊半径 = `aperture × |深度 − 对焦距离| / 深度`，上限 `maxBlur`（默认 `aperture × 3`）。flexlayer 按每个像素的深度算，近处的糊边盖到远处；
 - 拉焦：`focus` 在两个世界坐标之间插值；
-- 卡片要用 `cam.scene()` 组装，不要自己写 `h('layer', cam.layer, …)`：flexlayer 0.2.30 在三维平面上的 `blur` 只剩 1/4（有网格的场景里是 1/2），`scene()` 负责乘回来；
-- 一张平面整张一个模糊值，按它中心的深度算。网格（`box`、`sphere`）上的 `blur` 被 flexlayer 忽略，网格目前总是清楚的；
-- `draw` 里的点按 `cam.blurAt(p.depth)` 摊成更大、更淡的光斑。
+- `sharp: true` 的表面不吃景深。跨很多深度的地板、网格可以关掉；
+- `draw` 里的点不进深度缓冲，按 `cam.blurAt(p.depth)` 自己摊成更大、更淡的光斑。
 
 见 `examples/orbit`。
 

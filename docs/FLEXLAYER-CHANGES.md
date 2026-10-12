@@ -4,7 +4,7 @@
 
 motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做法。改完一项，motionflexlayer 删一段绕路代码。
 
-**状态核对于 flexlayer 0.2.30（db6ef3b）。** 第 1、4、5、8、15、16 项已完成，motionflexlayer 已删掉对应的绕路代码；第 17 项部分完成。第 4 项没有按下面的 `bleed` / `profile` 方案做，而是换成了更好的 `view` 取景：取景窗裁掉的不报 `overflow-canvas`，最小字号按屏幕上的大小和短边算。另外 flexlayer 新增的 `expect`、`data`、行内元素进报告、`flex-wrap`、`anchor-box="ink"`、`glyph()`、`canvas.create()` 的逐字位置和 `elements`、`ink-stroke`、`glass`、`extrude` 都已在示例里用上（`examples/ink`）。
+**状态核对于 flexlayer 0.2.55（0a277c5）。** 第 1、4、5、8、15、16、19、20、21 项已完成，motionflexlayer 已删掉对应的绕路代码；第 17 项部分完成。第 4 项没有按下面的 `bleed` / `profile` 方案做，而是换成了更好的 `view` 取景：取景窗裁掉的不报 `overflow-canvas`，最小字号按屏幕上的大小和短边算。`ink-stroke` 在 0.2.46 并入 `stroke`，示例已改。另外 flexlayer 的 `expect`、`data`、行内元素进报告、`flex-wrap`、`anchor-box="ink"`、`glyph()`、`canvas.create()` 的逐字位置和 `elements`、`glass`、`extrude` 都已在示例里用上（`examples/ink`）。
 
 | # | 优先级 | 改动 | 状态 | motionflexlayer 里受影响的代码 |
 | --- | --- | --- | --- | --- |
@@ -26,9 +26,9 @@ motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做
 | 16 | P1 | 合并子树墨迹时进 `g` | ✅ 已完成 | 无（`glyphAt` 每字一层 layer 只为绕字身中心转） |
 | 17 | P2 | `canvas.create` 的字带上原文位置；竖排按列给 | 部分：字带上所在 span 的 `id` | `examples/ink/page.ts` 的 `cells()` 已改成按 id 取；`type.ts` 竖排仍按 `x` 分列 |
 | 18 | P2 | 被取景窗裁开的文字和 `outside-safe` | 新增 | `examples/ink/page.ts`、`showreel` 卡片上的 `expect` |
-| 19 | P2 | 三维平面：`behind-camera` 按投影 `w <= 0` 判、显式 `preserve-3d`、只给图层 `blur` 补超采样倍数、斜平面上的 `text-overlap` 按 `quad` 判 | 新增（main 59bf05c 仍在） | `src/shot3d.ts` 里 `pose()` 的 `origin` 分摊和 `PLANE_BLUR_FIX`、`examples/orbit` 卡片上的 `expect` |
-| 20 | P1 | 新增 `camera` 属性：镜头（焦距 / `fov` / `lens` / `parallel`）、`at`、`orbit`、`roll`、`distance`、`from`、`vanish`；`perspective` 留作简写 | 新增 | `src/shot3d.ts` 的 `pose()` / `place()` 整段 |
-| 21 | P2 | 景深：深度缓冲上的散射模糊，排在第 19、20 项之后 | 新增 | `src/shot3d.ts` 的 `aperture`、`focus`、`blurAt()` |
+| 19 | P2 | 三维平面：`behind-camera` 按投影 `w <= 0` 判、显式 `preserve-3d`、只给图层 `blur` 补超采样倍数、斜平面上的 `text-overlap` 按 `quad` 判 | ✅ 已完成（0.2.50） | `origin` 分摊、`PLANE_BLUR_FIX`、orbit 卡片上的 `expect` 已删除 |
+| 20 | P1 | 新增 `camera` 属性：镜头（焦距 / `fov` / `lens` / `parallel`）、`at`、`orbit`、`roll`、`distance`、`from`、`vanish`；`perspective` 留作简写 | ✅ 已完成（0.2.50） | `shot3d()` 把 `camera` 写在取景层上，物体保持世界姿态 |
+| 21 | P2 | 景深：按像素深度做散射模糊 | ✅ 已完成（0.2.54） | `shot3d()` 把 `aperture`、`focus`、`max` 写进 `camera`；`blurAt()` 留给 `draw` 里的点 |
 
 ---
 
@@ -214,7 +214,7 @@ flexlayer 改用 `linebreak` 断行，并避开行首标点。ink 示例那段�
 
 ## 16. 合并子树墨迹时进 `g`（P1，✅ 已完成）
 
-`layer` 的 `ink-stroke`、`shadow` 合并子树墨迹时会走进 `g`。`glyphAt` 仍然每个字一层 `layer`，因为这样旋转、缩放可以直接绕字身中心，不再是为了绕开这个缺陷。
+`layer` 的 `stroke`、`shadow` 合并子树墨迹时会走进 `g`（0.2.46 起 `ink-stroke` 并入 `stroke`）。`glyphAt` 仍然每个字一层 `layer`，因为这样旋转、缩放可以直接绕字身中心，不再是为了绕开这个缺陷。
 
 ## 17. `canvas.create` 的字带上原文位置；竖排按列给（P2，部分完成）
 
@@ -241,15 +241,15 @@ flexlayer 改用 `linebreak` 断行，并避开行首标点。ink 示例那段�
 - 被 `view` 窗口边缘裁开的文字不报 `outside-safe`（和 `overflow-canvas` 一致），只看仍在窗内的部分；
 - 或者保持现状，但在 SPEC 里写明“推近时被取景窗裁开的文字会报，按帧写 `expect`”，以及“只比较左右”。
 
-## 19. 三维平面：`behind-camera` 的口径、分组、`blur`、`text-overlap`（P2，新增）
+## 19. 三维平面：`behind-camera` 的口径、分组、`blur`、`text-overlap`（P2，✅ 0.2.50 起已完成）
 
-motionflexlayer 的 `shot3d()` 把机位变换乘进每个物体，算出 `perspective` 层直接子元素的 `x`、`y`、`z`、`rotateX`、`rotateY`、`rotate`、`origin`。0.2.30 下能用，下面几处是绕路或瑕疵。核对过 flexlayer main（59bf05c），这几处仍然存在。
+0.2.50 起按下面的口径落地。motionflexlayer 里 `pose()` 把深度分摊到 `origin` 的做法、`PLANE_BLUR_FIX`，以及 `examples/orbit` 卡片上压 `text-overlap` 误报的 `expect` 都已删除。下面是当时的问题和落地后的口径。
 
 **`behind-camera` 的口径。** `perspectiveIssues` 拿属性 `z` 和视距比，绘制拿的是旋转之后的中心深度（平面是 `planeDepth`，网格是 `poseMatrix` 之后支点的深度）。贴地的 `rotateX="90"` 法线几乎横着，要很大的 `z` 才能把中心放到该在的深度，但这个 `z` 不会把它送到镜头后面：画出来了，却报 `behind-camera`。网格那条一样，检查用 `node.z`，绘制用支点深度。
 
 - 建议：“在身后”只有一个定义：绘制时用的那一点（平面中心、网格支点）投影的 `w <= 0`，和 `project` 返回空是同一件事。检查和绘制调同一个函数。默认机位下它等价于 `planeDepth >= perspective`，但规范里写 `w <= 0`，不要写这个特例：第 20 项的镜头不在 +z 轴上时，父空间里 `z` 小于焦距的点也可能在身后；
 - `perspective="parallel"` 没有镜头平面，不报（main 上已经这样）；
-- motionflexlayer 现在的做法：给了 `width`、`height` 时，`pose()` 把深度按最小范数分摊到 `z` 和 `origin` 的偏移上，`|z|` 不超过真实深度。改完后删掉。
+- 绕路已删除：`pose()` 直接写世界坐标，不再用 `origin` 分摊深度。
 
 **分组：显式的 `preserve-3d`。** 现在的约定和 CSS 一样：直接子元素才进这一层的深度排序，再往里先画进父平面。这条不改，不要变成“没有压平效果就默认不压平”：已有文件里包一层 layer 只为分组的写法很多，默认放开会改它们的像素。
 
@@ -272,12 +272,12 @@ motionflexlayer 的 `shot3d()` 把机位变换乘进每个物体，算出 `persp
 - 建议：只有图层自身的 `blur` 在离屏里乘上那一次的超采样倍数，语义是“平面局部像素”：投影变大时模糊跟着变大；
 - 平面当纹理贴进网格场景时，乘的是纹理那一次的 2；
 - 包着 `sphere` 这类网格、自己没有可贴纹理的那层，`blur` 会在 `stripMeshes` / `collectMeshes` 时被拆掉，现在静默不画。应报 `invalid-attr`。不要做成“整台网格画完再按层糊”：子树已经收进同一张深度缓冲，按像素盖好了，事后分不出哪一层是哪张卡片；
-- motionflexlayer 现在的做法：`cam.scene()` 按场景里有没有网格，把直接子元素的 `blur` 乘 4 或乘 2（`src/shot3d.ts` 的 `PLANE_BLUR_FIX`）。改完后删掉。
+- 绕路已删除：`PLANE_BLUR_FIX` 不再乘 `blur`。
 
 **斜平面上的 `text-overlap`。** 判重叠用投影后的轴对齐外接框，卡片一斜，同一张卡片上两行字的外接框就叠在一起，投影后的凸四边形其实不相交。
 
 - 建议：两段文字都有 `quad` 时按凸四边形判相交；有一段没有 `quad`（不在投影里，或者某个角在镜头后、`layoutQuad` 返回空）时，继续用现在的 `ink`；
-- 改完后删掉 `examples/orbit` 卡片上压这个误报的 `expect`，否则会变成 `unused-expect`。
+- `examples/orbit` 卡片上压这个误报的 `expect` 已删除。
 
 **验收。**
 
@@ -286,7 +286,7 @@ motionflexlayer 的 `shot3d()` 把机位变换乘进每个物体，算出 `persp
 - `blur="10"` 在上表三种情况下屏幕半径都是 10（带三维姿态时再乘投影倍数）；`shadow`、`glow` 的像素不变；
 - 同一张斜卡片上下两行字不报 `text-overlap`；两张真正交叠的斜卡片仍然报。
 
-## 20. 新增 `camera` 属性：一整台三维镜头（P1，新增）
+## 20. 新增 `camera` 属性：一整台三维镜头（P1，✅ 0.2.50 起已完成）
 
 **问题。** `perspective` 现在只能写一个焦距（或 main 上的 `parallel`），灭点固定在盒子中心，机位固定正对盒子。机位、朝向、灭点都是同一台镜头的属性，却只能由 motionflexlayer 乘进每个物体（第 19 项）。后果是：
 
@@ -350,12 +350,12 @@ h('layer', { width: 1920, height: 1080, camera: { fov: 40, at: [980, 640, 0], or
 - `schema.ts`、SPEC、`h()` 的属性类型：登记 `camera`，像 `data` 一样放行对象值；
 - `docs/proposals/3D.md` 里“不要另起 `camera`”“不做独立相机”两条要改：仍然不加标签，镜头是取景窗 `layer` 上的一个属性，和 `view` 同一个位置。
 
-**motionflexlayer 改完后。**
+**motionflexlayer 已改成。**
 
-- `shot3d()` 和 `shot()` 对称：只算镜头参数，`cam.layer` 变成 `{ width, height, camera: { … } }`；React 里 `<layer {...cam.layer}>` 照旧；
-- 物体直接用 `place()` 写世界姿态（`PlaceOptions` 加 `rotateX`、`rotateY`、`z`），`cam.place()`、`cam.pose()` 里的欧拉角拆分、`origin` 分摊删掉；
+- `shot3d()` 和 `shot()` 对称：只算镜头参数，`cam.layer` 是 `{ width, height, camera: { … } }`；React 里 `<layer {...cam.layer}>` 照旧；
+- `cam.place()` / `cam.pose()` 写世界姿态。`billboard` 仍在这边算：世界旋转取镜头旋转的逆，让物体在镜头里只剩绕视线的转；
 - `toScreen`、`project` 保留，给镜头外的标注和 `draw` 里的点云用，公式和 flexlayer 同一套；
-- 景深仍按 motionflexlayer 现在的近似做（按每张平面中心的深度写 `blur`），等第 21 项。
+- 景深走第 21 项：`aperture`、`focus`、`max` 写进 `camera`。
 
 **验收。**
 
@@ -367,9 +367,9 @@ h('layer', { width: 1920, height: 1080, camera: { fov: 40, at: [980, 640, 0], or
 - 不在默认机位时，没有三维姿态的卡片跟着轨道动；镜头转 180° 后在机位身后的卡片报 `behind-camera`、不画；
 - 低机位（`orbit 0 4`）看一块 `rotateX="90"` 的地板，不报 `behind-camera`。
 
-## 21. 景深（P2，新增，排在第 19、20 项之后）
+## 21. 景深（P2，✅ 0.2.54 起已完成）
 
-不放进第 20 项。它和“子元素保持世界姿态”无关，放进 P1 会把镜头矩阵卡住。
+0.2.54 起 `camera` 的 `aperture` 按每个像素的深度做景深，半径是 `aperture × |深度 − focus| / 深度`，近处的糊边盖到远处，`sharp="true"` 的表面保持清楚。`shot3d()` 把 `aperture`、`focus`、`max` 写进 `camera`；`blurAt()` 只留给 `draw` 里的点。下面是当时把它从第 20 项拆出去的原因，参数化后来按无限远半径落地。
 
 **为什么要等。**
 
@@ -378,7 +378,7 @@ h('layer', { width: 1920, height: 1080, camera: { fov: 40, at: [980, 640, 0], or
 - `defocus` 进报告、糊掉的字放宽 `min-font-size`、不吃景深的开关（motionflexlayer 的 `sharp`），阈值和继承都还没定；
 - 元素自己的 `blur` 仍是平面局部像素，景深做了也不代替第 19 项的超采样修正。
 
-**motionflexlayer 现在的做法。** `shot3d({ aperture, focus, maxBlur })` 按每张平面中心的深度写 `blur`，网格不糊，`draw` 里的点用 `blurAt()`。这是近似，不是这一项的规范。
+**motionflexlayer 已改成。** 不再按平面中心写 `blur`。`draw` 里的点仍用 `blurAt()`，因为它们不进深度缓冲。
 
 ---
 
@@ -387,7 +387,7 @@ h('layer', { width: 1920, height: 1080, camera: { fov: 40, at: [980, 640, 0], or
 下面这些放在 motionflexlayer 里做，flexlayer 不用管：
 
 - 时间轴、节拍、cue、段落；
-- 镜头参数（`shot()`：对准、推近、旋转、震屏、盖满；`shot3d()`：环绕机位、视角、世界姿态到层属性）、滚动、擦除、打字机这些原语；
+- 镜头参数（`shot()`：对准、推近、旋转、震屏、盖满；`shot3d()`：把环绕机位、视角写成 `camera`，物体保持世界姿态）、滚动、擦除、打字机这些原语；
 - 多进程渲染、ffmpeg；
 - 旁白合成与排期；
 - 音频混音（由 visualtone 负责）；

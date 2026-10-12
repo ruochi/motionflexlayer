@@ -4,11 +4,10 @@
  *   npm run mfl -- render examples/orbit/index.ts
  *
  * 同一台相机同时管三种东西：
- *   - 平面卡片（HTML 文字）和网格（box、sphere）：cam.place() 算出每个物体的姿态，都是 perspective 层的直接子元素；
+ *   - 平面卡片（HTML 文字）和网格（box、sphere）：cam.place() 写世界姿态，都是 camera 层的直接子元素；
  *   - draw 里画的点环：cam.project() 逐点投影；
  *   - 镜头外的标注：cam.toScreen() 跟住三维里的一点。
- * 35mm 镜头带景深，对焦点从“远”拉到“近”：卡片按自己的深度糊，点环按 cam.blurAt() 摊成光斑。
- * 卡片要用 cam.scene() 组装，它负责修正 flexlayer 三维平面上 blur 的倍数。
+ * 35mm 镜头带景深，对焦点从“远”拉到“近”：flexlayer 按每个像素的深度糊，点环按 cam.blurAt() 摊成光斑。
  * 震屏仍交给外面一层 shot() 的 view：三维取景窗是它的舞台。
  */
 import { box, defineComposition, fade, fx, h, keyframes, place, pulse, shot, shot3d, text, wiggle, type Frame } from 'motionflexlayer'
@@ -120,10 +119,7 @@ function scene(f: Frame) {
       h('box', { x: 0, y: 0, width: 1500, height: 1300, depth: 16, fill: '#232733' }),
     ),
     ...CARDS.map((c) =>
-      cam.place(
-        { x: c.x, y: FLOOR_Y - CARD_H / 2 - 8, z: c.z, width: CARD_W, height: CARD_H, attrs: { expect: 'text-overlap: 机位绕到侧面时卡片前后遮挡，斜着的字外接框也会压到一起' } },
-        card(c),
-      ),
+      cam.place({ x: c.x, y: FLOOR_Y - CARD_H / 2 - 8, z: c.z, width: CARD_W, height: CARD_H }, card(c)),
     ),
     cam.place({ x: 1420, y: FLOOR_Y - 8 - 70 - hop, z: -160, width: 140, height: 140, sharp: true }, h('sphere', { cx: 70, cy: 70, r: 70, fill: ACCENT })),
   ]

@@ -358,7 +358,7 @@ function sticker(f: Frame): Child[] {
     sheet(
       {
         id: 'sticker',
-        'ink-stroke': strokeAttr,
+        stroke: strokeAttr,
         shadow: lift > 0 && !flooding ? `0 ${(8 + 18 * lift).toFixed(1)} ${(20 + 30 * lift).toFixed(1)} #000000aa` : undefined,
         scale: bump > 0.001 ? 1 + 0.08 * bump : undefined,
         origin: `${W / 2} ${CY}`,
