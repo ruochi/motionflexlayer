@@ -2,13 +2,13 @@ import { existsSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { renderFvg, type DrawFn } from 'flexlayer'
+import { renderLayer, type SKRSContext2D } from 'flexlayer'
 
 /** flexlayer 的默认字体，可变字重。draw 里写 ctx.font 用它和画面其余文字一致。 */
 export const DEFAULT_FONT = 'ChillDuanSans'
 
-/** draw 回调拿到的 ctx 类型（@napi-rs/canvas 的 2D 上下文）。 */
-export type Canvas2D = Parameters<DrawFn>[0]
+/** 绘图上下文。flexlayer 导出的是 napi 的完整 2D 类型，包含 drawImage。 */
+export type Canvas2D = SKRSContext2D
 
 export type OffscreenCanvas = {
   width: number
@@ -69,6 +69,6 @@ let fontsReady: Promise<void> | undefined
 
 /** 确保默认字体已下载并注册。在 setup 里量字、采样文字之前调用。 */
 export function ensureFonts(): Promise<void> {
-  fontsReady ??= renderFvg('<layer width="1" height="1"></layer>').then(() => undefined)
+  fontsReady ??= renderLayer('<layer width="1" height="1"></layer>').then(() => undefined)
   return fontsReady
 }

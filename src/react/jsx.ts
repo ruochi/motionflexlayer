@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { DrawFn } from 'flexlayer'
+import type { DrawFn } from '../paint.js'
 import type { StyleObject } from '../nodes.js'
 import type { CameraSpec } from '../shot3d.js'
 
@@ -9,7 +9,10 @@ type Num = number | string
 export type FvgCommon = {
   id?: string
   style?: string | StyleObject
-  /** 在元素自身内容画完之后调用，坐标原点是元素左上角。 */
+  /**
+   * 在元素自身内容画完之后调用，坐标原点是元素左上角。
+   * 渲染成同尺寸的 canvas，加上执行这个函数的 script。
+   */
   draw?: DrawFn
   /** 结构化数据，draw 里从 el.data 取。 */
   data?: unknown
@@ -72,8 +75,7 @@ export type LayerProps = Positioned &
     /** 只在根上作为画布底色。 */
     background?: string
     color?: string
-    perspective?: Num | 'parallel'
-    /** 一整台三维镜头。用 shot3d().layer 展开，或自己写 { fov, at, orbit, distance }。 */
+    /** 一整台三维镜头。用 shot3d().layer 展开，或自己写 { focal, fov, at, orbit, distance }。flexlayer 0.4 起没有 perspective 属性。 */
     camera?: CameraSpec
     /** 子元素沿父链进入外层这台镜头，不先压成一张平面。 */
     'preserve-3d'?: boolean | string
@@ -97,14 +99,14 @@ export type LayerProps = Positioned &
     'grade-mask'?: string
   }
 
-/** 自定义标签：带 draw 和宽高就是一个参与排版的绘图盒子，例如 <chart width={300} height={200} draw={…} />。 */
+/** 自定义标签：带 draw 和宽高时收成 layer（id 用这个标签名），例如 <chart width={300} height={200} draw={…} />。 */
 export type CustomProps = Positioned & Effects & { width?: Num; height?: Num; opacity?: Num } & Record<string, unknown>
 
 export type FvgIntrinsicElements = {
   layer: LayerProps
   font: { family?: string; src?: string; key?: string | number }
-  /** 字符串形式的绘图体，只有 ctx 和 el 可用。React 里更推荐 draw={fn} 属性。 */
-  draw: FvgCommon
+  canvas: FvgCommon & { width?: Num; height?: Num }
+  script: FvgCommon
   symbol: FvgCommon & { width?: Num; height?: Num }
   /** 蒙版，只能是 layer 的直接子元素。里面的图形只取 alpha。 */
   mask: FvgCommon

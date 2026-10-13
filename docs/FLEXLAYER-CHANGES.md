@@ -4,31 +4,31 @@
 
 motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做法。改完一项，motionflexlayer 删一段绕路代码。
 
-**状态核对于 flexlayer 0.2.55（0a277c5）。** 第 1、4、5、8、15、16、19、20、21 项已完成，motionflexlayer 已删掉对应的绕路代码；第 17 项部分完成。第 4 项没有按下面的 `bleed` / `profile` 方案做，而是换成了更好的 `view` 取景：取景窗裁掉的不报 `overflow-canvas`，最小字号按屏幕上的大小和短边算。`ink-stroke` 在 0.2.46 并入 `stroke`，示例已改。另外 flexlayer 的 `expect`、`data`、行内元素进报告、`flex-wrap`、`anchor-box="ink"`、`glyph()`、`canvas.create()` 的逐字位置和 `elements`、`glass`、`extrude` 都已在示例里用上（`examples/ink`）。
+**状态核对于 flexlayer 0.6.12（493c3cc）。** 第 1、3、4、5、6、8、13、15、16、18、19、20、21 项已完成，motionflexlayer 已删掉对应的绕路代码；第 17 项部分完成。第 2 项（导出字体与 canvas）和第 7 项（行内 span 变换）仍未做。第 4 项没有按下面的 `bleed` / `profile` 方案做，而是换成了更好的 `view` 取景：取景窗裁掉的不报 `overflow-canvas`，最小字号按屏幕上的大小和短边算。`ink-stroke` 在 0.2.46 并入 `stroke`，示例已改。0.3.0 起 `renderFvg` / `checkFvg` / `FvgNode` 改名为 `renderLayer` / `checkLayer` / `LayerNode`。0.4.0 删掉了 `perspective`，镜头只写 `camera`；没写 `camera` 时，带网格、`ground` 或 `rotateX` / `rotateY` / `z` 的最外层用自己的高度当视距。0.5.0 删掉 `<draw>` 和 `draw` 回调，自定义像素改成 `<canvas>` 和 `<script>`。0.6.0 起 HTML 默认值和浏览器一致（`align-items` / `align-content` 为 `stretch`，`flex-shrink` 为 1，`text-wrap` 为 `wrap`，初始字号 16px，宽高是内容盒）。`box`、`cylinder`、`extrude` 仍能画，但报 `non-canonical`；正的 `depth` 写在 `rect`、`circle`、`path` 上。
 
 | # | 优先级 | 改动 | 状态 | motionflexlayer 里受影响的代码 |
 | --- | --- | --- | --- | --- |
 | 1 | P0 | 打包：`prepare` + `files` | ✅ 已完成 | 依赖已改成 `github:ruochi/flexlayer#<commit>` |
 | 2 | P0 | 导出字体与 canvas | 未做 | `src/canvas.ts` 整个文件 |
-| 3 | P0 | `draw` 的 ctx 类型补全 | 未做 | `src/render/stills.ts` 里 `drawImage` 的强转 |
+| 3 | P0 | `draw` 的 ctx 类型补全 | ✅ 已完成（0.6.12 导出 `SKRSContext2D`；0.5.0 起 draw 改为 canvas + script） | `src/paint.ts` 的 `DrawFn` |
 | 4 | P1 | 动画用的检查配置 | ✅ 已完成：`view` 取景 + 屏幕字号（0.2.22、0.2.30） | 示例里的 `lint.ignore` 已全部删掉；`camera()` 换成 `shot()` |
 | 5 | P1 | `origin` 支持任意点 | ✅ 已完成（0.2.19） | `place()` 的 `origin` 接受 `[x, y]` |
-| 6 | P1 | 离屏画布按可见区域裁剪 | 未做（0.2.30 实测） | `MOTION.md` 里“镜头里别放 blur / mask”这条规则 |
+| 6 | P1 | 离屏画布按可见区域裁剪 | ✅ 已完成（0.2.58） | `MOTION.md` 里这条限制已撤掉 |
 | 7 | P1 | 行内 `span` 的变换与透明度 | 未做（文字整段可以 `style="scale:…"`） | `src/drawkit.ts` 的 `drawGlyphs` |
 | 8 | P0 | 原始像素输出 | ✅ 已完成：`renderFrames({ format: 'rgba' })` | `src/render/raw.ts` 已删除 |
 | 9 | P1 | 成组透明度 | 未做 | 无（现在没有绕路，只能接受瑕疵） |
 | 10 | P2 | `draw` 里查询其它元素的盒子 | 未做 | 示例里手算的坐标 |
 | 11 | P2 | 秒为单位的 `spring` | 未做 | 无（motionflexlayer 自带） |
 | 12 | P2 | 层效果：`bloom`、`chroma` | 未做 | 示例里在 draw 里手画的光晕 |
-| 13 | P1 | 单帧取原始像素、异步帧函数 | 新增 | `src/render/frame.ts` 的 `renderRgba` |
+| 13 | P1 | 单帧取原始像素、异步帧函数 | ✅ 已完成：`renderLayer(node, { format: 'rgba' })` | `renderRgba` 直接要这一帧的像素；帧函数仍先在这边求文档 |
 | 14 | P2 | `renderFrames` 的 `t` 由调用方给 | 新增 | 无 |
 | 15 | P0 | 中文折行：句读落到行首 | ✅ 已完成 | `headsOk` 已删除 |
 | 16 | P1 | 合并子树墨迹时进 `g` | ✅ 已完成 | 无（`glyphAt` 每字一层 layer 只为绕字身中心转） |
 | 17 | P2 | `canvas.create` 的字带上原文位置；竖排按列给 | 部分：字带上所在 span 的 `id` | `examples/ink/page.ts` 的 `cells()` 已改成按 id 取；`type.ts` 竖排仍按 `x` 分列 |
-| 18 | P2 | 被取景窗裁开的文字和 `outside-safe` | 新增 | `examples/ink/page.ts`、`showreel` 卡片上的 `expect` |
+| 18 | P2 | 被取景窗裁开的文字和 `outside-safe` | ✅ 已完成（0.2.58） | 取景窗或 `overflow="hidden"` 裁开的字不再报；仍露在安全区外的字还要报 |
 | 19 | P2 | 三维平面：`behind-camera` 按投影 `w <= 0` 判、显式 `preserve-3d`、只给图层 `blur` 补超采样倍数、斜平面上的 `text-overlap` 按 `quad` 判 | ✅ 已完成（0.2.50） | `origin` 分摊、`PLANE_BLUR_FIX`、orbit 卡片上的 `expect` 已删除 |
-| 20 | P1 | 新增 `camera` 属性：镜头（焦距 / `fov` / `lens` / `parallel`）、`at`、`orbit`、`roll`、`distance`、`from`、`vanish`；`perspective` 留作简写 | ✅ 已完成（0.2.50） | `shot3d()` 把 `camera` 写在取景层上，物体保持世界姿态 |
-| 21 | P2 | 景深：按像素深度做散射模糊 | ✅ 已完成（0.2.54） | `shot3d()` 把 `aperture`、`focus`、`max` 写进 `camera`；`blurAt()` 留给 `draw` 里的点 |
+| 20 | P1 | 新增 `camera` 属性：镜头（焦距 / `fov` / `lens` / `parallel`）、`at`、`orbit`、`roll`、`distance`、`from`、`vanish` | ✅ 已完成（0.2.50）。0.4.0 起删掉 `perspective` 简写 | `shot3d()` 把 `camera` 写在取景层上，物体保持世界姿态。`shot3d({ perspective })` 仍是这边的视距选项，写进 `camera.focal` |
+| 21 | P2 | 景深：按像素深度做散射模糊 | ✅ 已完成（0.2.54） | `shot3d()` 把 `aperture`、`focus`、`max` 写进 `camera`；`blurAt()` 留给 canvas 脚本里不进深度缓冲的点 |
 
 ---
 
@@ -69,9 +69,11 @@ export async function initFonts(opts?: { fontsCacheDir?: string; fonts?: Array<{
 
 **验收。** 下游先 `await initFonts()`，再在 `createCanvas(100, 100)` 上 `measureText`，量出的宽度和 flexlayer 报告里同一段文字的 `ink.width` 一致，误差不超过 1px。
 
-## 3. `draw` 的 ctx 类型补全（P0）
+## 3. `draw` 的 ctx 类型补全（P0，✅ 已完成）
 
-**问题。** `DrawFn` 的 `ctx` 用的是 `@napi-rs/canvas` 的 `CanvasRenderingContext2D` 类型，里面缺 `drawImage`、`createPattern`、`getTransform` 等方法，但它们运行时都存在。下游只能强转。
+flexlayer 导出 `SKRSContext2D`。0.5.0 起没有 `draw` 回调，自定义像素是 `<canvas>` 和 `<script>`。motionflexlayer 的 `DrawFn` 用这个类型，`ctx.drawImage` 不再强转。`fx()` / `painted()` / React 的 `draw={fn}` 在排版之后、绘制之前执行，`el.w`、`el.h`、`el.t` 仍在。
+
+**当时的问题。** `DrawFn` 的 `ctx` 用的是 `@napi-rs/canvas` 的 `CanvasRenderingContext2D` 类型，里面缺 `drawImage`、`createPattern`、`getTransform` 等方法，但它们运行时都存在。下游只能强转。
 
 **建议。** `DrawFn` 改用 `SKRSContext2D`（napi 的完整类型），或者在 flexlayer 里补一份类型声明。顺便导出：
 
@@ -100,7 +102,9 @@ flexlayer 0.2.19 起 `origin` 可以写任意一点：`"640 420"`、`"33% 39%"`�
 
 motionflexlayer 的 `place()` 的 `origin` 接受 `'120 80'` 或 `[x, y]`。`shot()` 的旋转也靠它：舞台层以对准的点为 `origin` 转。
 
-## 6. 离屏画布按可见区域裁剪（P1）
+## 6. 离屏画布按可见区域裁剪（P1，✅ 0.2.58 起已完成）
+
+0.2.58 起，带 `blur`、`grade` 或 `<mask>` 的层在取景放大后只光栅化落在画面里的一块，并留出模糊和羽化要采样的边。`paintWithLayerFilter` 也按同一块可见区域裁。`MOTION.md` 里“舞台里别放这些效果再推很近”的限制已撤掉。下面是当时的问题和实测。
 
 **0.2.30 实测仍然存在，`view` 也一样。** 舞台里放一段带 `blur` 的字和一段带 `grade` 的字，整帧渲染：1× 约 90ms，4× 约 140ms，16× 约 470ms；用 `scale` 推近和用 `view` 推近几乎相同。
 
@@ -183,9 +187,11 @@ draw: (ctx, el) => {
 <layer chroma="2">           <!-- 红蓝通道错开的像素数 -->
 ```
 
-## 13. 单帧取原始像素、异步帧函数（P1，新增）
+## 13. 单帧取原始像素、异步帧函数（P1，✅ 已完成）
 
-**问题。** 原始像素只能从 `renderFrames` 拿，而它要求 `component` 是同步函数。motionflexlayer 的帧函数可以是异步的（React 适配、按需加载数据），所以现在每一帧都要先求出节点树，再临时包一个只含这一帧的 composition 交给 `renderFrames`：
+`renderLayer(node, { format: 'rgba', t, frame, fps })` 直接返回 `{ rgba, width, height, report }`。`renderRgba` 先 `await nodeAt`（帧函数仍可以是异步的），再调这一次，不再包一个单帧的 `renderFrames`。flexlayer 的 composition `component` 仍然是同步的，这边不需要它变成异步。
+
+**当时的问题。** 原始像素只能从 `renderFrames` 拿，而它要求 `component` 是同步函数。motionflexlayer 的帧函数可以是异步的（React 适配、按需加载数据），所以当时每一帧都要先求出节点树，再临时包一个只含这一帧的 composition 交给 `renderFrames`：
 
 ```ts
 // src/render/frame.ts
@@ -227,7 +233,9 @@ flexlayer 改用 `linebreak` 断行，并避开行首标点。ink 示例那段�
 
 **建议。** `PlacedChar` 加 `index`（写清楚是 UTF-16 还是码点）。竖排时每项加 `column`。
 
-## 18. 被取景窗裁开的文字和 `outside-safe`（P2，新增）
+## 18. 被取景窗裁开的文字和 `outside-safe`（P2，✅ 0.2.58 起已完成）
+
+取景窗或 `overflow="hidden"` 裁开的文字边不再报 `outside-safe`。裁完仍露在安全区外的字还是要报。下面是当时的问题。
 
 **问题。**
 
@@ -298,8 +306,7 @@ flexlayer 改用 `linebreak` 断行，并避开行首标点。ink 示例那段�
 **名字和位置。**
 
 - 叫 `camera`。CSS 的 `perspective` 只是视距，装进机位、朝向以后名不副实；
-- `perspective="1484"` 保留，是 `camera="focal 1484"` 的简写；`perspective="parallel"` 是 `camera="parallel"` 的简写。现有文件不用改；
-- 同一层同时写 `camera` 和 `perspective` 报 `invalid-attr`，以 `camera` 为准；
+- 0.4.0 起 `perspective` 属性已删除，只写 `camera`。`shot3d({ perspective })` 是 motionflexlayer 自己的视距选项，写进 `camera.focal`，不会再把 `perspective` 属性交给 flexlayer；
 - 只写在 `layer` 上，和 `view` 不能写在同一层：震屏、调色、二维推拉写在外面的 `view` 取景窗上，三维取景窗是它的舞台。
 
 **值的两种写法。** 和 `data` 的先例一样：程序里传对象，`.layer` 文件里写字符串。`camera` 的字段是固定的，文件里不用 JSON，用 `grade` 那样逗号分段、每段一个名字的短写法：

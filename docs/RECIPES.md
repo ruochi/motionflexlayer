@@ -339,7 +339,7 @@ const targets = sampleTextPoints('<draw>', { font: font(300, 800), width: W, hei
 ```ts
 const cam = shot3d({ width: W, height: H, x: 980, y: 640, yaw, pitch, zoom })
 cam.scene(
-  cam.place({ x: 980, y: 780, rotateX: 90, width: 1500, height: 1300 }, h('box', { x: 0, y: 0, width: 1500, height: 1300, depth: 16, fill: '#232733' })),   // 地板
+  cam.place({ x: 980, y: 780, rotateX: 90, width: 1500, height: 1300 }, h('rect', { x: 0, y: 0, width: 1500, height: 1300, depth: 16, fill: '#232733' })),   // 地板
   cam.place({ x: 700, y: 672, z: -320, width: 300, height: 200 }, card),                                                                                 // 卡片
   cam.place({ x: 1420, y: 702, z: -160, width: 140, height: 140 }, h('sphere', { cx: 70, cy: 70, r: 70, fill: '#f2b84b' })),                           // 球
 )
@@ -348,12 +348,12 @@ cam.scene(
 - `cam.scene(...)` 就是三维取景窗那层（宽高和 `camera`），等于 `h('layer', cam.layer, ...)`；
 - 机位写在这一层的 `camera` 上。`cam.place` 把世界姿态原样写成 `x`、`y`、`z`、`rotateX`、`rotateY`、`rotate`。要分组，在中间一层写 `preserve-3d`，子元素仍进这一台镜头；没写的话，嵌套的平面会先画进父平面；
 - 物体的 `x`、`y`、`z` 是它盒子中心的世界坐标，`rotateX`、`rotateY`、`rotate` 是它在世界里的朝向，顺序和 flexlayer 一层上的一样；
-- 有 `box`、`sphere`、`cylinder`、`torus`、`tube`、`extrude`、`model` 时，这一层是一台带深度缓冲的场景，地板、卡片、球互相遮挡。只有平面时按平面中心的深度排序，大地板最好用一个薄 `box`；
+- 有 `rect` / `path` 的 `depth`、`sphere`、`torus`、`tube`、`model` 时，这一层是一台带深度缓冲的场景，地板、卡片、球互相遮挡。只有平面时按平面中心的深度排序，大地板最好用一个薄的 `rect`（写上 `depth`）。`box`、`extrude` 仍能画，会报 `non-canonical`；
 - `billboard: true` 的物体始终正对镜头，标签、粒子贴片用；
 - 震屏、调色、暗角写在外面一层 `shot()` 的取景窗上，三维取景窗是它的舞台；字幕、标注写在取景窗外，用 `cam.toScreen(x, y, z)` 跟住三维里的点；
 - `draw` 里的点云、粒子用 `cam.project(x, y, z)`，返回屏幕坐标、这一点的缩放和深度，和平面、网格共用同一台相机。它们画在一张二维 `fx` 上，不进深度缓冲，前后关系要自己排。
 
-**镜头焦距。** `lens` 按全画幅等效写毫米数，换算成竖直视角：24 广角（约 53°）、35 人文（约 38°）、50 标准（约 27°）、85 人像（约 16°）、200 长焦（约 7°）。`fov` 直接写视角，`perspective` 直接写视距，优先级 `perspective` > `lens` > `fov`。
+**镜头焦距。** `lens` 按全画幅等效写毫米数，换算成竖直视角：24 广角（约 53°）、35 人文（约 38°）、50 标准（约 27°）、85 人像（约 16°）、200 长焦（约 7°）。`fov` 直接写视角，`perspective` 直接写视距（写进 `camera.focal`，不是 flexlayer 的属性），优先级 `perspective` > `lens` > `fov`。
 
 - 同样的 `zoom` 下，广角的机位贴得更近，近大远小更夸张；长焦退得远，前后景压在一起；
 - 滑动变焦：`zoom` 不动，只给 `lens` 做动画。`zoom` 管的是对准点那张平面上的大小，所以对准点上的东西大小不变，机位自己前后移，背景跟着伸缩；

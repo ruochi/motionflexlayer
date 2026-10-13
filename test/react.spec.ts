@@ -1,4 +1,4 @@
-import type { FvgNode } from 'flexlayer'
+import type { LayerNode as FvgNode } from 'flexlayer'
 import { createElement as e, createContext, useContext, type ReactElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { frameAt, defineComposition } from '../src/composition.js'
@@ -8,11 +8,18 @@ import { shot, text } from '../src/nodes.js'
 const comp = defineComposition({ id: 'r', width: 100, height: 100, duration: 10, render: () => null })
 
 describe('renderToFvg', () => {
-  it('draw 闭包原样保留', () => {
+  it('draw 收成 canvas 和 script', () => {
     const draw = () => {}
     const [n] = renderToFvg(e('layer', { width: 10 }, e('fx', { draw, width: 5 }))) as FvgNode[]
     expect(n!.tag).toBe('layer')
-    expect((n!.children[0] as FvgNode).draw).toBe(draw)
+    const host = n!.children[0] as FvgNode
+    expect(host.tag).toBe('layer')
+    expect(host.attrs.width).toBe('5')
+    const canvas = host.children.find((c) => typeof c !== 'string' && c.tag === 'canvas') as FvgNode
+    const script = host.children.find((c) => typeof c !== 'string' && c.tag === 'script') as FvgNode
+    expect(canvas.attrs.width).toBe('5')
+    expect(script.scriptFns).toHaveLength(1)
+    expect(host.legacyDraw).toBeUndefined()
   })
 
   it('非 draw 的函数 prop 报错', () => {

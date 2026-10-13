@@ -1,4 +1,4 @@
-import { h, type FvgNode } from 'flexlayer'
+import { h, type LayerNode as FvgNode } from 'flexlayer'
 import { clamp, r2, type Vec3 } from './math.js'
 import type { Child } from './nodes.js'
 
@@ -199,7 +199,7 @@ function markSharp(child: Child): Child {
  * cam.scene(cam.place({ x: 400, y: 300, z: -200, rotateY: 30 }, card), ...)
  * ```
  *
- * 要分组，在中间一层写 `preserve-3d`，子元素仍进这一台镜头。自己再写 `camera` 或 `perspective` 的内层是另一台镜头。
+ * 要分组，在中间一层写 `preserve-3d`，子元素仍进这一台镜头。自己再写 `camera` 的内层是另一台镜头。
  * 震屏、调色、暗角写在外面一层 `shot()` 的取景窗上；字幕、标注写在取景窗外，用 `toScreen` 跟住三维里的点。
  */
 export function shot3d(opts: Shot3DOptions): Shot3D {

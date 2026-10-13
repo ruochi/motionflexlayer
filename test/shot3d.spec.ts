@@ -1,4 +1,4 @@
-import { checkFvg, h } from 'flexlayer'
+import { checkLayer, h } from 'flexlayer'
 import { describe, expect, it } from 'vitest'
 import { defineComposition } from '../src/composition.js'
 import { shot } from '../src/nodes.js'
@@ -32,7 +32,7 @@ function worldCorners(p: Pose3D, w: number, hh: number): Array<[number, number, 
 async function reportedQuad(cam: ReturnType<typeof shot3d>, p: Pose3D, w: number, hh: number, sized = true) {
   const size = sized ? { width: w, height: hh } : {}
   const card = cam.place({ ...p, ...size, id: 'card' }, h('rect', { x: 0, y: 0, width: w, height: hh, fill: '#ff0000' }))
-  const report = await checkFvg(h('layer', { width: W, height: H }, h('layer', cam.layer, card)))
+  const report = await checkLayer(h('layer', { width: W, height: H }, h('layer', cam.layer, card)))
   const el = report.elements.find((e) => e.id === 'card')
   expect(el?.quad).toBeDefined()
   return { quad: el!.quad!.map((q) => [q.x, q.y]), issues: report.issues.map((i) => i.code) }

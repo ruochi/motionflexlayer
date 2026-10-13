@@ -1,8 +1,9 @@
 import { createContext, type ReactNode } from 'react'
 import Reconciler from 'react-reconciler'
 import { ConcurrentRoot, DefaultEventPriority } from 'react-reconciler/constants.js'
-import { h, type FvgChild, type FvgNode } from 'flexlayer'
+import { h, type LayerChild as FvgChild, type LayerNode as FvgNode } from 'flexlayer'
 import { css, type StyleObject } from '../nodes.js'
+import { drawNodes, type DrawFn } from '../paint.js'
 
 type Instance = { kind: 'el'; tag: string; props: Record<string, unknown>; children: Node[] }
 type TextInstance = { kind: 'text'; text: string }
@@ -14,15 +15,51 @@ export const RAW_TAG = 'mfl-raw'
 
 const SKIP = new Set(['children', 'key', 'ref'])
 
+/** 可以挂 draw 的宿主。自定义标签和已经删掉的 draw 会收成 layer。 */
+const DRAW_HOST = new Set([
+  'layer',
+  'rect',
+  'circle',
+  'ellipse',
+  'line',
+  'arrow',
+  'polyline',
+  'polygon',
+  'path',
+  'curve',
+  'g',
+  'div',
+  'h1',
+  'h2',
+  'h3',
+  'p',
+  'span',
+  'strong',
+  'b',
+  'em',
+  'i',
+  'u',
+  'img',
+  'image',
+  'sphere',
+  'box',
+  'cylinder',
+  'torus',
+  'tube',
+  'extrude',
+  'model',
+  'ground',
+])
+
+function positive(v: unknown, fallback: number): number {
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN
+  return Number.isFinite(n) && n > 0 ? n : fallback
+}
+
 function toAttrs(tag: string, props: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(props)) {
-    if (SKIP.has(k) || v == null || v === false) continue
-    if (k === 'draw') {
-      if (typeof v !== 'function') throw new Error(`<${tag}> 的 draw 必须是函数 (ctx, el) => void`)
-      out.draw = v
-      continue
-    }
+    if (SKIP.has(k) || v == null || v === false || k === 'draw') continue
     if (typeof v === 'function') throw new Error(`<${tag}> 的属性 ${k} 是函数。视频没有交互，事件回调不会被调用；只有 draw 可以是函数`)
     if (k === 'style' && typeof v === 'object') {
       out.style = css(v as StyleObject)
@@ -46,7 +83,27 @@ function toFvg(node: Node, into: FvgChild[]): void {
   }
   const kids: FvgChild[] = []
   for (const c of node.children) toFvg(c, kids)
-  into.push(h(node.tag, toAttrs(node.tag, node.props) as Parameters<typeof h>[1], ...kids))
+  const draw = node.props.draw
+  if (draw != null && typeof draw !== 'function') throw new Error(`<${node.tag}> 的 draw 必须是函数 (ctx, el) => void`)
+  const attrs = toAttrs(node.tag, node.props)
+  if (typeof draw === 'function') {
+    const host = DRAW_HOST.has(node.tag) ? node.tag : 'layer'
+    if (host !== node.tag && attrs.id == null && node.tag !== 'fx') attrs.id = node.tag
+    const width = positive(attrs.width, 300)
+    const height = positive(attrs.height, 150)
+    const id = typeof attrs.id === 'string' ? attrs.id : undefined
+    kids.push(
+      ...drawNodes(draw as DrawFn, {
+        width,
+        height,
+        data: node.props.data,
+        id,
+      }),
+    )
+    into.push(h(host, attrs as Parameters<typeof h>[1], ...kids))
+    return
+  }
+  into.push(h(node.tag, attrs as Parameters<typeof h>[1], ...kids))
 }
 
 const remove = (list: Node[], child: Node) => {

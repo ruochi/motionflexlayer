@@ -1,4 +1,4 @@
-import type { FvgReport, Issue } from 'flexlayer'
+import type { Issue, LayerReport as FvgReport } from 'flexlayer'
 import type { LintProfile } from '../composition.js'
 
 export type IssueStat = {

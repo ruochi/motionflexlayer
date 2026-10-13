@@ -1,5 +1,5 @@
 import { createContext, createElement as e, Fragment, useContext, type ReactElement, type ReactNode } from 'react'
-import type { DrawFn, FvgChild, FvgNode } from 'flexlayer'
+import type { DrawFn, FvgChild, FvgNode } from '../nodes.js'
 import type { Frame } from '../composition.js'
 import {
   css,
@@ -65,7 +65,7 @@ export function Sequence({ from, duration, children }: SequenceProps): ReactElem
 
 /**
  * 用 React 写帧：defineComposition({ render: fromReact(<Scene />) })。
- * 也可以传函数 (f) => <Scene … />。小写标签是 flexlayer 元素，draw={fn} 闭包原样保留。
+ * 也可以传函数 (f) => <Scene … />。小写标签是 flexlayer 元素，draw={fn} 会变成这块元素里的 canvas 和 script。
  */
 export function fromReact(app: ReactElement | ((f: Frame) => ReactElement)): (f: Frame) => FvgChild[] {
   return (f) => {

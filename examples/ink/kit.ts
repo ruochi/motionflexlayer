@@ -156,9 +156,9 @@ const CHAPTERS: Partial<Record<Id, Chapter>> = {
   reflow: { api: 'canvas.create() · writing-mode', note: '逐字过渡要先排好两套版面，再一个字一个字对上' },
   stroke: { api: 'stroke', note: 'CSS 描边压在笔画中线上，几个字也合不成一圈' },
   glass: { api: 'glass', note: 'backdrop-filter 只会模糊，折射要自己写着色器' },
-  solid: { api: 'extrude · perspective', note: '网页要 three.js，还要把中文字体转成几何体' },
+  solid: { api: 'path depth · camera', note: '网页要 three.js，还要把中文字体转成几何体' },
   camera: { api: 'view · canvas.create()', note: '网页要先渲染一遍，量出目标的位置再推镜' },
-  report: { api: 'checkFvg() · anchor-box="ink"', note: '浏览器只给盒子；字形的边界要逐字去量' },
+  report: { api: 'checkLayer() · anchor-box="ink"', note: '浏览器只给盒子；字形的边界要逐字去量' },
 }
 
 const ORDER = vo.lines.map((l) => l.id as Id)

@@ -1,4 +1,4 @@
-import type { FvgReport, Issue } from 'flexlayer'
+import type { Issue, LayerReport as FvgReport } from 'flexlayer'
 import { describe, expect, it } from 'vitest'
 import { IssueLog } from '../src/render/issues.js'
 

@@ -7,8 +7,8 @@
  *
  *   script.ts  文案和旁白。镜头里的动作都卡在旁白的词上。
  *   type.ts    片头、字落位、重排、描边：glyph() 拆字，canvas.create() 求每个字的格子，stroke 合并描边。
- *   optics.ts  玻璃折射、立体字：glass、extrude、perspective。
- *   page.ts    镜头推向排版算出的一点、按着墨对齐、收尾：origin="x y"、checkFvg()、anchor-box="ink"。
+ *   optics.ts  玻璃折射、立体字：glass、path 的 depth、camera。
+ *   page.ts    镜头推向排版算出的一点、按着墨对齐、收尾：origin="x y"、checkLayer()、anchor-box="ink"。
  *   sound.ts   配乐和音效，用的是画面的时间点。
  *
  * 几处衔接：片头的书法字飞进段落里自己的格子；竖排里的三个字留下来做描边；描边漫开成下一段的红底；

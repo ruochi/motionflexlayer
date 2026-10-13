@@ -4,7 +4,7 @@
  *   npm run mfl -- render examples/orbit/index.ts
  *
  * 同一台相机同时管三种东西：
- *   - 平面卡片（HTML 文字）和网格（box、sphere）：cam.place() 写世界姿态，都是 camera 层的直接子元素；
+ *   - 平面卡片（HTML 文字）和网格（rect 的 depth、sphere）：cam.place() 写世界姿态，都是 camera 层的直接子元素；
  *   - draw 里画的点环：cam.project() 逐点投影；
  *   - 镜头外的标注：cam.toScreen() 跟住三维里的一点。
  * 35mm 镜头带景深，对焦点从“远”拉到“近”：flexlayer 按每个像素的深度糊，点环按 cam.blurAt() 摊成光斑。
@@ -116,7 +116,7 @@ function scene(f: Frame) {
   const objects = [
     cam.place(
       { x: 980, y: FLOOR_Y, z: 0, rotateX: 90, width: 1500, height: 1300, sharp: true },
-      h('box', { x: 0, y: 0, width: 1500, height: 1300, depth: 16, fill: '#232733' }),
+      h('rect', { x: 0, y: 0, width: 1500, height: 1300, depth: 16, fill: '#232733' }),
     ),
     ...CARDS.map((c) =>
       cam.place({ x: c.x, y: FLOOR_Y - CARD_H / 2 - 8, z: c.z, width: CARD_W, height: CARD_H }, card(c)),

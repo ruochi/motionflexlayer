@@ -1,8 +1,12 @@
-import { h, type DrawFn, type FvgChild, type FvgNode } from 'flexlayer'
+import { h, type LayerChild, type LayerNode } from 'flexlayer'
 import { clamp, r2 } from './math.js'
+import { drawNodes, type DrawFn } from './paint.js'
 
 export { h }
-export type { DrawFn, FvgChild, FvgNode }
+export type { DrawFn, LayerChild, LayerNode }
+/** flexlayer 0.3 起类型改名为 LayerNode / LayerChild。这两个名字仍指同一份类型。 */
+export type FvgNode = LayerNode
+export type FvgChild = LayerChild
 
 export type Anchor =
   | 'center'
@@ -111,25 +115,64 @@ export type FxOptions = {
   /** 中心点，默认画布中心。 */
   x?: number
   y?: number
-  /** 自定义标签名。报告和问题路径里显示它，方便定位。 */
+  /** 没有 id 时用作这一层的 id，报告里更好认。 */
   name?: string
   id?: string
 }
 
+export type PaintedOptions = {
+  width: number
+  height: number
+  x?: number
+  y?: number
+  /** 不写则不定位，可以放进 flex。 */
+  anchor?: string
+  id?: string
+  /** 没有 id 时用作这一层的 id，方便在报告里认出来。 */
+  name?: string
+  data?: unknown
+  attrs?: Record<string, string | number | undefined>
+}
+
 /**
- * 一块全画布（或指定大小）的绘图层。draw 在 (0,0)-(width,height) 的坐标里画。
- * 绘图模式是像素的出口：粒子、笔触、光效、数据图都在这里。
+ * 一块参与排版的绘图层。flexlayer 0.5 起自定义像素是 `<canvas>` 加 `<script>`，
+ * 不再有 `draw` 属性和自定义标签。`draw` 仍是 `(ctx, el) => void`，`el.w`、`el.h`、`el.t` 照旧。
+ */
+export function painted(opts: PaintedOptions, draw: DrawFn): FvgNode {
+  const id = opts.id ?? opts.name
+  return h(
+    'layer',
+    {
+      ...opts.attrs,
+      id,
+      x: opts.x != null ? r2(opts.x) : undefined,
+      y: opts.y != null ? r2(opts.y) : undefined,
+      anchor: opts.anchor,
+      width: r2(opts.width),
+      height: r2(opts.height),
+      data: opts.data,
+    },
+    ...drawNodes(draw, { width: opts.width, height: opts.height, data: opts.data, id }),
+  )
+}
+
+/**
+ * 一块全画布（或指定大小）的绘图层，中心落在 (x, y)。
+ * draw 在 (0,0)-(width,height) 的坐标里画。粒子、笔触、光效、数据图都在这里。
  */
 export function fx(opts: FxOptions, draw: DrawFn): FvgNode {
-  return h(opts.name ?? 'fx', {
-    id: opts.id,
-    x: r2(opts.x ?? opts.width / 2),
-    y: r2(opts.y ?? opts.height / 2),
-    anchor: 'center',
-    width: opts.width,
-    height: opts.height,
+  return painted(
+    {
+      width: opts.width,
+      height: opts.height,
+      x: opts.x ?? opts.width / 2,
+      y: opts.y ?? opts.height / 2,
+      anchor: 'center',
+      id: opts.id,
+      name: opts.name,
+    },
     draw,
-  })
+  )
 }
 
 export type ShotOptions = {

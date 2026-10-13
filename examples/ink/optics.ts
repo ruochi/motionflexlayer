@@ -148,10 +148,17 @@ function solidScene(f: Frame): Child[] {
   const bz = -360 + 700 * ball * ball
   const rolling = t > T_BALL && t < T_BACK + 0.9
   return [
-    sheet(
-      { id: 'solid', perspective: 1600, expect: floor > 0.01 || rolling ? 'overflow-canvas: 地面和滚过的小球伸出画面' : undefined },
+    h(
+      'layer',
+      {
+        width: W,
+        height: H,
+        id: 'solid',
+        camera: { focal: 1600 },
+        expect: floor > 0.01 || rolling ? 'overflow-canvas: 地面和滚过的小球伸出画面' : undefined,
+      },
       floor > 0.01
-        ? h('layer', { opacity: floor.toFixed(3), y: (220 * (1 - floor)).toFixed(1) }, h('box', { x: W / 2 - 1100, y: FLOOR.toFixed(1), width: 2200, height: 24, depth: 1200, fill: '#2a2d36' }))
+        ? h('layer', { opacity: floor.toFixed(3), y: (220 * (1 - floor)).toFixed(1) }, h('rect', { x: W / 2 - 1100, y: FLOOR.toFixed(1), width: 2200, height: 24, depth: 1200, fill: '#2a2d36' }))
         : null,
       rolling ? h('sphere', { cx: bx.toFixed(1), cy: (FLOOR - 80).toFixed(1), r: 80, z: bz.toFixed(1), fill: C.gold }) : null,
       h(
@@ -167,7 +174,7 @@ function solidScene(f: Frame): Child[] {
           scale: show < 0.999 ? (0.85 + 0.15 * show).toFixed(4) : undefined,
           opacity: show < 0.999 ? Math.min(1, show).toFixed(3) : undefined,
         },
-        h('extrude', { d: MO.d, depth: depth.toFixed(1), fill: C.red }),
+        h('path', { d: MO.d, depth: depth.toFixed(1), fill: C.red }),
       ),
     ),
   ]
