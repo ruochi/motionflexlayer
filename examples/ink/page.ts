@@ -8,7 +8,7 @@
  *         报告里的数字说明各自的字形离盒子左边多远；说到“着墨”时按着墨对齐。
  *   收尾  三个名字依次出现，一条时间轴把它们串起来，印章盖在线的末端。
  */
-import { canvas, checkFvg, glyph, h, type FvgReport, type PlacedLine } from 'flexlayer'
+import { canvas, checkLayer, glyph, h, type LayerReport, type PlacedLine } from 'flexlayer'
 import {
   fade,
   fx,
@@ -144,7 +144,18 @@ function cameraScene(f: Frame): Child[] {
         })
       : null,
     place(
-      { x: PX, y: PY, anchor: 'top-left', opacity: pageIn, id: 'page', attrs: { expect: 'outside-safe: 推近后正文被取景窗裁开; text-overlap: 推近后正文从章节标签和字幕底下经过' } },
+      {
+        x: PX,
+        y: PY,
+        anchor: 'top-left',
+        opacity: pageIn,
+        id: 'page',
+        // 取景窗裁开的字不再报 outside-safe。正文只在放大、或推向「这里」时压到章节标签和字幕上。
+        attrs:
+          pageIn > 0.15 && out < 0.92 && (cam.zoom > 1.15 || t >= T_PUSH)
+            ? { expect: 'text-overlap: 推近后正文从章节标签和字幕底下经过' }
+            : undefined,
+      },
       pageNode(C.gold),
     ),
     pageIn < 1 ? glyphAt(MO_SMALL, { ...MO_AT, fill: C.red }) : null,
@@ -209,7 +220,7 @@ const specimen = (sp: (typeof SPECIMENS)[number], x: number) =>
   h('layer', { id: sp.id, x: x.toFixed(2), y: sp.y }, h('p', { style: `white-space:nowrap; ${sp.style}; color:${C.paper}` }, sp.text))
 
 /** 先排一遍，报告里每行的 box 和 ink 就是下面动画用的数。 */
-const REPORT: FvgReport = await checkFvg(h('layer', { width: W, height: H }, ...SPECIMENS.map((sp) => specimen(sp, GUIDE))))
+const REPORT: LayerReport = await checkLayer(h('layer', { width: W, height: H }, ...SPECIMENS.map((sp) => specimen(sp, GUIDE))))
 const MEASURE = SPECIMENS.map((sp) => {
   const e = REPORT.elements.find((x) => x.id === sp.id)!
   return { box: e.box, ink: e.ink!, inset: e.ink!.left - e.box.left }

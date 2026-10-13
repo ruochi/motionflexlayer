@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
-import type { DrawFn } from 'flexlayer'
+import type { DrawFn } from '../paint.js'
 import type { StyleObject } from '../nodes.js'
+import type { CameraSpec } from '../shot3d.js'
 
 type Num = number | string
 
@@ -8,7 +9,10 @@ type Num = number | string
 export type FvgCommon = {
   id?: string
   style?: string | StyleObject
-  /** 在元素自身内容画完之后调用，坐标原点是元素左上角。 */
+  /**
+   * 在元素自身内容画完之后调用，坐标原点是元素左上角。
+   * 渲染成同尺寸的 canvas，加上执行这个函数的 script。
+   */
   draw?: DrawFn
   /** 结构化数据，draw 里从 el.data 取。 */
   data?: unknown
@@ -54,6 +58,12 @@ type Shape = FvgCommon &
     stroke?: string
     'stroke-width'?: Num
     opacity?: Num
+    depth?: Num
+    tube?: Num
+    round?: string
+    material?: string
+    hidden?: string
+    halo?: Num
   }
 
 type Box4 = { x1?: Num; y1?: Num; x2?: Num; y2?: Num }
@@ -65,11 +75,20 @@ export type LayerProps = Positioned &
     /** 只在根上作为画布底色。 */
     background?: string
     color?: string
-    perspective?: Num
+    /** 一整台三维镜头。用 shot3d().layer 展开，或自己写 { focal, fov, at, orbit, distance }。flexlayer 0.4 起没有 perspective 属性。 */
+    camera?: CameraSpec
+    /** 子元素沿父链进入外层这台镜头，不先压成一张平面。 */
+    'preserve-3d'?: boolean | string
+    /** 不吃这一层镜头的景深。 */
+    sharp?: boolean | string
     'font-family'?: string
     safe?: Num
     opacity?: Num
     rotate?: Num
+    /** 绕水平轴转，度。写在物体自己那层上，是世界姿态。 */
+    rotateX?: Num
+    rotateY?: Num
+    z?: Num
     scale?: Num
     origin?: string
     overflow?: 'hidden' | 'visible'
@@ -80,20 +99,27 @@ export type LayerProps = Positioned &
     'grade-mask'?: string
   }
 
-/** 自定义标签：带 draw 和宽高就是一个参与排版的绘图盒子，例如 <chart width={300} height={200} draw={…} />。 */
+/** 自定义标签：带 draw 和宽高时收成 layer（id 用这个标签名），例如 <chart width={300} height={200} draw={…} />。 */
 export type CustomProps = Positioned & Effects & { width?: Num; height?: Num; opacity?: Num } & Record<string, unknown>
 
 export type FvgIntrinsicElements = {
   layer: LayerProps
   font: { family?: string; src?: string; key?: string | number }
-  /** 字符串形式的绘图体，只有 ctx 和 el 可用。React 里更推荐 draw={fn} 属性。 */
-  draw: FvgCommon
+  canvas: FvgCommon & { width?: Num; height?: Num }
+  script: FvgCommon
   symbol: FvgCommon & { width?: Num; height?: Num }
   /** 蒙版，只能是 layer 的直接子元素。里面的图形只取 alpha。 */
   mask: FvgCommon
   use: Positioned & { href?: string; rotate?: Num; scale?: Num }
   rect: Shape
   circle: Shape
+  box: Shape
+  sphere: Shape
+  cylinder: Shape
+  torus: Shape
+  tube: Shape
+  extrude: Shape
+  model: Shape
   ellipse: Shape
   line: FvgCommon & Box4 & { stroke?: string; 'stroke-width'?: Num }
   arrow: FvgCommon & Box4 & { head?: Num; stroke?: string; 'stroke-width'?: Num }

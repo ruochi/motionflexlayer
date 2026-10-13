@@ -102,7 +102,7 @@ const k = pulse(globalT, tl.times('kick'))
 | 组件 | 对应核心 API | 说明 |
 | --- | --- | --- |
 | `<Place x y anchor opacity rotate scale origin width height>` | `place()` | 定位和变换。`opacity` ≤ 0.002 时整个子树不渲染 |
-| `<Fx draw={(ctx, el) => …} x y width height name>` | `fx()` | canvas 绘制。默认铺满整个画布 |
+| `<Fx draw={(ctx, el) => …} x y width height name>` | `fx()` | canvas 绘制。默认铺满整个画布。`name` 变成这一层的 id |
 | `<Reveal progress width height direction feather>` | `reveal()` | 蒙版擦除 |
 | `<Roll value cell size axis align items={[…]}>` | `roll()` | 滚动窗口。`items` 用数组 prop 传，不用 children |
 | `<Text style as>` | `text()` | 单行文字，不换行 |
@@ -118,11 +118,24 @@ const cam = shot({ width: 1920, height: 1080, x, y, zoom, shakeX })
 </layer>
 ```
 
+三维镜头同样没有组件：`shot3d()` 的 `layer` 展开在三维取景窗上（带 `camera`）。没有旋转的物体可以把 `pose()` 展开在自己那层上。有 `rotateX`、`rotateY` 或 `rotate` 时用 `place()`：flexlayer 的 `z` 发生在旋转之前，`place()` 会在外面加一层 `preserve-3d` 放位置，旋转写在里面，中心才停在给出的世界坐标上。
+
+```tsx
+const cam = shot3d({ width: 1920, height: 1080, x, y, zoom, yaw, pitch })
+<layer {...cam.layer}>
+  <layer {...cam.pose({ x: 700, y: 672, z: -320, width: 300, height: 200 })} glow="24 #f2b84b88">
+    <Box style={{ width: 300, height: 200, background: '#22324d', borderRadius: 28 }}>…</Box>
+  </layer>
+</layer>
+```
+
+景深写在 `camera` 上，展开 `cam.layer` 和 `cam.scene()` 是同一台镜头。
+
 `style` 可以是字符串，也可以是对象。对象的键用驼峰写法，数字会自动加 `px`。`opacity`、`fontWeight`、`lineHeight`、`zIndex`、`flex*`、`order` 这几个不加单位。
 
 ## `draw` 闭包
 
-`draw={fn}` 会原样保留到 flexlayer 节点上，不会被序列化。所以闭包可以直接用组件里的变量：
+`draw={fn}` 留在本进程的 `<script>` 里，不会被序列化。flexlayer 0.5 起没有 `draw` 属性：这块元素下面会放一块同尺寸的 `<canvas>`，脚本在排版之后画出像素。闭包可以直接用组件里的变量：
 
 ```tsx
 function Bars({ values }: { values: number[] }) {
@@ -138,7 +151,7 @@ function Bars({ values }: { values: number[] }) {
 }
 ```
 
-`el` 是 flexlayer 排版后这个元素的盒子（`el.w`、`el.h`），所以 flex 布局决定了大小，`draw` 按实际大小去画。
+`el.w`、`el.h` 是这块画布排版后的大小，`el.t` 是当前帧的秒。宽高在元素上写死时，画的坐标和布局一致。
 
 ## 和核心 API 混用
 
@@ -150,7 +163,7 @@ function Bars({ values }: { values: number[] }) {
 </Place>
 ```
 
-反过来也可以：`fromReact(<X />)` 返回一个帧函数，结果是 `FvgChild[]`。可以把它当成核心写法里的一层：
+反过来也可以：`fromReact(<X />)` 返回一个帧函数，结果是 `LayerChild[]`（`FvgChild` 仍是这个类型的别名）。可以把它当成核心写法里的一层：
 
 ```ts
 const overlay = fromReact(<LowerThird />)
@@ -159,7 +172,7 @@ render: (f) => [background(f), ...overlay(f), post(f)]
 
 ## 小写标签和类型
 
-小写标签就是 flexlayer 的元素：`layer`、`fx`（也可以用任意自定义名字，例如 `<bars draw={…}>`，它在报告里更容易认出来）、`div`、`p`、`h1`、`span`、`rect`、`circle`、`path`、`mask`、`font` 等。属性名和 flexlayer markup 相同，例如 `x`、`y`、`anchor`、`origin`、`overflow`、`glow`。类型定义在 `src/react/jsx.ts`。
+小写标签就是 flexlayer 的元素：`layer`、`div`、`p`、`h1`、`span`、`rect`、`circle`、`path`、`canvas`、`mask`、`font` 等。不认识的标签不能再当绘图盒子；`<bars draw={…}>` 会收成 `layer`，id 是 `bars`，报告里仍能认出来。属性名和 flexlayer markup 相同，例如 `x`、`y`、`anchor`、`origin`、`overflow`、`glow`。三维镜头写 `camera`，没有 `perspective` 属性。类型定义在 `src/react/jsx.ts`。
 
 属性值的转换规则：
 
@@ -177,8 +190,8 @@ React 协调加上转换，每帧额外多几毫秒。和 PNG 编码、绘制比
 
 Vue 适配放在 v2，思路和 React 相同：
 
-- 用 `@vue/runtime-core` 的 `createRenderer` 写一个自定义渲染器，宿主节点就是 flexlayer 的 `FvgNode`；
+- 用 `@vue/runtime-core` 的 `createRenderer` 写一个自定义渲染器，宿主节点就是 flexlayer 的 `LayerNode`；
 - 每帧 `createApp(Scene).mount(root)`，转换后 `unmount`，同样不保留跨帧状态；
 - `useFrame()` 用 `inject` 实现，`<Sequence>` 用 `provide` 覆盖局部时间；
-- `draw` 用 prop 传函数，渲染器在 `patchProp` 里原样挂到节点上；
+- `draw` 用 prop 传函数，渲染器把它收成 `<canvas>` 和 `<script>`，不把函数写进属性；
 - 组件名和参数与 React 版一致：`Place`、`Fx`、`Reveal`、`Roll`、`Text`、`Box`、`Raw`、`Sequence`。

@@ -56,7 +56,7 @@
 
 | 层 | 用什么 | 负责 |
 | --- | --- | --- |
-| 结构 | `layer`、HTML 文字、`div` 的 flex，以及 `place` / `roll` / `reveal` / `typewriter`；镜头用 `view` 取景，参数由 `shot()` 算 | 有哪些东西、在哪、什么时候出现、怎么排 |
+| 结构 | `layer`、HTML 文字、`div` 的 flex，以及 `place` / `roll` / `reveal` / `typewriter`；镜头用 `view` 取景，参数由 `shot()` 算；三维镜头用取景层上的 `camera`，参数由 `shot3d()` 算 | 有哪些东西、在哪、什么时候出现、怎么排 |
 | 像素 | `draw` 回调：`fx()` 或任意自定义标签 | 笔触、粒子、光效、数据图、3D 点云 |
 | 时间 | `timeline()`、`progress` / `fade` / `spring` / `pulse` / `stagger` | 一切数值随 t 变化 |
 | 声音 | `audio.clips`、`buses`、`duck`、`tracks` | 旁白、音乐、音效放到 cue 上，由 visualtone 混音 |
@@ -74,8 +74,9 @@
 | 嵌套 `layer` 只定位，不排版 | 一个 `layer` 里并排放两段文字 | `place({…}, box({ display: 'flex', gap: 12 }, a, b))` | 文字叠在一起，报 `text-overlap` |
 | 嵌套 `layer` 不填背景 | `h('layer', { background: '#fff' })` | 用 `rect`、HTML `background` 或 `draw` | `invalid-attr` |
 | 推镜、震屏用取景窗，不缩放整个画面 | `place({ x: 960, y: 540, width: W, height: H, scale: zoom, origin: [x, y] }, …scene)` | `const cam = shot({ width: W, height: H, x, y, zoom })`，再写 `h('layer', { width: W, height: H, view: cam.view }, h('layer', cam.stage, …scene))` | 出画的元素每帧报 `overflow-canvas`，字号按名义大小查，露底也查不出来 |
+| 三维镜头的物体保持世界姿态 | `cam.scene(h('layer', { rotateY: -yaw }, ...scene))`，用一层包住整个场景再转 | `cam.scene(cam.place({ x, y, z, rotateY }, card), …)`。要分组就在中间一层写 `preserve-3d` | 没写 `preserve-3d` 的层会先把子树压成一张平面再转 |
 | 章节、字幕、标注写在取景窗外 | 把字幕放进舞台层，跟着镜头一起放大 | 取景窗外用成片像素；要跟住舞台上的一点用 `cam.toScreen(x, y)` | 字幕跟着推近、震动，读不清 |
-| 舞台里不放 `blur` / `mask` / `grade` / `glass` 再推很近 | `shot({ zoom: 16 })` 推向一张带 `mask` 的卡片 | 带这些效果的元素放到舞台外，或者只在 zoom 不大的时候用；调色写在取景窗那层上 | 离屏画布按放大后的尺寸分配，16 倍时单帧多出约 400ms |
+| 推得很近时，模糊和蒙版跟着可见区域走 | 自己按放大倍数再开一张全尺寸离屏 | 直接写 `blur`、`grade`、`mask`。flexlayer 0.2.58 起离屏只光栅化落在画面里的一块 | 整张元素按放大倍数分配，16 倍时多出几百毫秒 |
 | 动画文字不换行 | 让 `p` 自动折行 | `text()` 默认 `white-space:nowrap` | 字距、字号变化时整段重排，画面跳动 |
 | 逐字动画放在 `draw` 里 | 给 `span` 写 `transform` | `drawGlyphs(ctx, str, { each })` | `span` 不支持变换，属性被忽略 |
 | 在 `canvas.create` 的结果里按 id 找字 | 按原文的序号数 `lines[].chars` | 要找的字包一层 `<span id="here">`，取 `chars.filter((c) => c.id === 'here')` | 折行处的空格不占格，序号会错开；竖排时 `lines` 是一格一项，按 `x` 分列 |
@@ -272,6 +273,7 @@ npm run mfl -- render comp.ts                 # 成片
 - `box(style, ...children)`：flex 容器。
 - `fx({ width, height, x, y, name }, draw)`：绘图层。
 - `shot({ width, height, stage, x, y, zoom, rotate, shakeX, shakeY, cover })`：镜头参数，纯函数。返回 `view`（写在取景窗那层）、`stage`（舞台层的宽高，有旋转时带 `rotate` 和 `origin`）、实际的 `zoom` 和 `toScreen(x, y)`。`(x, y)` 是舞台上要对准的点，落在取景窗中心；`shakeX`、`shakeY` 是成片像素；默认把 `zoom` 抬到刚好盖满舞台，`cover: false` 关掉。取景窗多大、放在哪、几个窗口取同一个舞台，都由调用方自己写。
+- `shot3d({ width, height, x, y, z, zoom, distance, yaw, pitch, rotate, from, fov, lens, perspective, aperture, focus, maxBlur })`：三维镜头，`shot()` 的透视版，纯函数。`x`、`y`、`zoom`、`rotate` 和 `shot()` 同义，`distance` 直接给机位到对准点的距离（推轨，写了就不看 `zoom`），`yaw`、`pitch` 是机位绕对准点转的角度，`from` 直接给机位；`lens` 是全画幅等效焦距（毫米），`aperture` 打开景深，`focus` 是对焦距离或一个世界坐标，默认对准点；`perspective` 直接给视距，写进 `camera.focal`（flexlayer 不再有 `perspective` 属性）。返回 `layer`（宽高和 `camera`）、`scene(...objects)`、`place(pose, ...children)` / `pose(pose)`（世界姿态，原样写到层上）、`toScreen(x, y, z)`、`project(x, y, z)` 和 `blurAt(depth)`。分组用 `preserve-3d`；震屏、调色写在外面一层 `shot()` 的取景窗上。
 - `roll({ value, cell, size, axis, align }, items)`：滚动窗口。
 - `reveal({ progress, width, height, direction, feather }, ...children)`：蒙版擦除。
 - `typewriter(tokens, shown, style)`：打字机。
@@ -325,7 +327,7 @@ npm run mfl -- render comp.ts                 # 成片
 | `overflow-canvas` | error | 推镜、震屏写成取景窗之后，窗外的部分不再报。入场前停在画外、冲击波扩散时出现，在那个元素上写 `expect`。如果出现在**静止段落**的文字上，就是真的越界，要修 |
 | `view-outside` | error | 取景超出了舞台，成片会露底。用 `shot()` 默认的 `cover` 会把 zoom 抬到盖满；自己写 `view` 时检查对准的点和倍数 |
 | `min-font-size` | warn | 拿屏幕上的字号（乘了 `scale` 和 `view` 的倍数）和 `min(宽, 高) / 1080 × 24` 比，1080p 下是 24px。HUD、角标也不小于 24px；缩着入场、收走的那几帧写 `expect` |
-| `outside-safe` | warn | 只比较左右。推近时被取景窗左右边缘裁开的正文也会报，写 `expect`。静止段落的标题出现这个问题要修 |
+| `outside-safe` | warn | 只比较左右。被取景窗或 `overflow="hidden"` 裁开的字不报；裁完仍露在安全区外的要报。静止段落的标题出现这个问题要修 |
 | `text-overlap` | warn | 几乎总是 bug：常见原因是一个 layer 里放了两段文字却没有用 flex。交叉淡入淡出时短暂重叠可以接受，在先画的那个元素上写 `expect` |
 | `unused-expect` | warn | 写了 `expect` 但这一帧没出现。把 expect 的开关条件改准 |
 | `ink-inset` | info | 字形比盒子靠里。要让笔画贴齐定位点，写 `anchor-box="ink"` |

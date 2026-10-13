@@ -45,6 +45,7 @@ export {
   text,
   box,
   fx,
+  painted,
   shot,
   roll,
   reveal,
@@ -57,6 +58,7 @@ export {
   type StyleObject,
   type PlaceOptions,
   type FxOptions,
+  type PaintedOptions,
   type ShotOptions,
   type Shot,
   type RollOptions,
@@ -65,7 +67,10 @@ export {
   type DrawFn,
   type FvgChild,
   type FvgNode,
+  type LayerChild,
+  type LayerNode,
 } from './nodes.js'
+export { shot3d, type Shot3DOptions, type Shot3D, type Pose3D, type Projected, type CameraSpec } from './shot3d.js'
 export {
   font,
   measureGlyphs,

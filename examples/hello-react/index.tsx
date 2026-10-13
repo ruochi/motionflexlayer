@@ -4,7 +4,7 @@
  *   npm run mfl -- render examples/hello-react/index.tsx
  *
  * 要点：
- * - 小写标签是 flexlayer 元素；draw={fn} 闭包原样保留，不会被序列化成字符串
+ * - 小写标签是 flexlayer 元素；draw={fn} 留在本进程的 script 里，不会被序列化成字符串
  * - useFrame() 拿当前帧；<Sequence from> 让组件从 0 秒开始写，摆到时间轴上
  * - 每帧都是全新挂载，useMemo / useContext 正常用；useState / useEffect 没有意义（帧之间不保留状态）
  */

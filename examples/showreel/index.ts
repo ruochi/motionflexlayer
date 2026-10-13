@@ -18,6 +18,7 @@ import {
   h,
   lerp,
   noise1,
+  painted,
   place,
   progress,
   reveal,
@@ -171,7 +172,7 @@ const SAFE = 0.04 * H
 /** 左下角段落名所在的成片像素范围。 */
 const HUD_ROLL = { left: 100, right: 460, top: H - 64 - 17, bottom: H - 64 + 17 }
 
-/** 卡片下半部文字区在屏幕上的外接框：标题到代码行，左右收进 padding。flexlayer 的 outside-safe 只看左右。 */
+/** 卡片下半部文字区在屏幕上的外接框。裁开的字不报 outside-safe；仍露在安全区外的字要报，而且只比左右。 */
 function cardTextOnScreen(cx: number, cy: number, cam: Shot) {
   const [x0, y0] = cam.toScreen(cx - CARD_W / 2 + 24, cy - CARD_H / 2 + 312)
   const [x1, y1] = cam.toScreen(cx + CARD_W / 2 - 24, cy - CARD_H / 2 + 405)
@@ -217,8 +218,8 @@ function card(i: number, t: number, cam: Shot) {
         border: '1px solid rgba(255,255,255,0.14)',
         alignItems: 'start',
       },
-      // 自定义标签 + 宽高 + draw：参与 flex 排版的绘图盒子
-      h('viz', { width: 310, height: 270, draw: drawViz(i) }),
+      // 宽高固定的绘图层，参与 flex 排版
+      painted({ width: 310, height: 270, name: `viz-${i}` }, drawViz(i)),
       box(
         { display: 'flex', gap: 14, alignItems: 'center' },
         label(`0${i + 1}`, { fontSize: 24, color: c.color, letterSpacing: 2 }),
@@ -241,7 +242,10 @@ function layoutScene(t: number) {
   const cam = shot({ ...SIZE, zoom, x: ORBIT_AT[0] + (W / 2 - screen[0]) / zoom, y: ORBIT_AT[1] + (H / 2 - screen[1]) / zoom })
   return framed(
     cam,
-    h('headline', { x: 960, y: 205, anchor: 'center', width: 1500, height: 140, opacity: headOut.toFixed(3), draw: (ctx, el) => drawHeadline(ctx, el, el.t) }),
+    painted(
+      { x: 960, y: 205, anchor: 'center', width: 1500, height: 140, name: 'headline', attrs: { opacity: headOut.toFixed(3) } },
+      (ctx, el) => drawHeadline(ctx, el, el.t),
+    ),
     place({ x: 960, y: 322 + (1 - subIn) * 14, opacity: subIn }, label('布局交给 flex，像素交给 draw', { fontSize: 32, color: MUTED, letterSpacing: 6 })),
     ...[0, 1, 3, 2].map((i) => card(i, t, cam)),
   )

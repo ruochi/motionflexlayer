@@ -1,4 +1,4 @@
-import { type FvgNode } from 'flexlayer'
+import { type LayerNode as FvgNode } from 'flexlayer'
 import { describe, expect, it } from 'vitest'
 import { defineComposition } from '../src/composition.js'
 import { css, fx, h, place, shot, typewriter, type Shot } from '../src/nodes.js'
