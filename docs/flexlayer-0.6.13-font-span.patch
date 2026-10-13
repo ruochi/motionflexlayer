@@ -1,0 +1,682 @@
+From 3b1e5be938b1c96766e5abeaaeb5753dbb2652db Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Tue, 13 Oct 2026 11:38:20 +0000
+Subject: [PATCH] =?UTF-8?q?=E5=AF=BC=E5=87=BA=E5=90=8C=E4=B8=80=E4=BB=BD?=
+ =?UTF-8?q?=E7=94=BB=E5=B8=83=E5=92=8C=E5=AD=97=E4=BD=93=E5=87=86=E5=A4=87?=
+ =?UTF-8?q?=EF=BC=8C=E8=A1=8C=E5=86=85=E5=AD=97=E5=8F=AF=E4=BB=A5=E5=81=9A?=
+ =?UTF-8?q?=E4=BA=8C=E7=BB=B4=E7=BB=98=E5=88=B6=E5=8F=98=E6=8D=A2?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+主入口给出 createCanvas、loadImage、DEFAULT_FONT_FAMILY、initFonts、applyCanvasFont、registerFontPath。行内 translate、rotate、scale、opacity 只影响绘制；行宽、行高和折行仍按前进宽度算，转完的四边形并进着墨框。split=chars 沿用原来的 owner。
+---
+ CHANGELOG.md      |   6 ++
+ README.md         |   2 +-
+ SPEC.md           |  10 ++-
+ package-lock.json |   4 +-
+ package.json      |   2 +-
+ src/fonts.ts      |   9 +++
+ src/index.ts      |   2 +
+ src/layout.ts     |   3 +-
+ src/paint.ts      |  42 ++++++++---
+ src/style.ts      |  25 ++++++-
+ src/text.spec.ts  | 182 +++++++++++++++++++++++++++++++++++++++++++++-
+ src/text.ts       |  93 +++++++++++++++++++++--
+ src/types.ts      |  10 +++
+ 13 files changed, 363 insertions(+), 27 deletions(-)
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 912e403..7c08819 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,11 @@
+ # Changelog
+ 
++## 0.6.13
++
++主入口导出和 flexlayer 同一份画布绑定：`createCanvas`、`loadImage`、`DEFAULT_FONT_FAMILY`、`initFonts(families?)`、`applyCanvasFont`、`registerFontPath`。`initFonts` 先准备默认字体，再按名字准备目录里的字体，下载失败直接抛出。不导出 `GlobalFonts`。
++
++行内 `span` 的 `translate`、`rotate`、`scale`、`opacity` 只影响绘制。行宽、行高和折行仍按没变换的前进宽度算，后面的行留在原位，布局盒也不动。变换后的四边形并进这一行和文字盒子的着墨框。`split="chars"` 把字拆开，沿用原来的 owner。相邻片段合并时把这四项算进去。
++
+ ## 0.6.12
+ 
+ Skill 的特色补上同一深度里的几件事：线框遇空白不断、文字按墨迹分层、景深按物体糊、描边绕墨迹、半透明玻璃不挡后面的棱。
+diff --git a/README.md b/README.md
+index 57a0646..211cb9a 100644
+--- a/README.md
++++ b/README.md
+@@ -4,7 +4,7 @@
+ 
+ Flex Layer 用标签描述一帧画面：图形用 SVG 的写法。文字和排布是 HTML，按 HTML 渲染，`style` 的初始值就是 CSS 的。渲染器读入 `.layer`，输出 PNG 和一份布局报告。
+ 
+-规范见 [SPEC.md](SPEC.md)。给模型的入口见 [AGENTS.md](AGENTS.md)，一页写法见 [docs/CHEATSHEET.md](docs/CHEATSHEET.md)，字体、图片和配色见 [docs/RESOURCES.md](docs/RESOURCES.md)。当前版本是 0.6.12。
++规范见 [SPEC.md](SPEC.md)。给模型的入口见 [AGENTS.md](AGENTS.md)，一页写法见 [docs/CHEATSHEET.md](docs/CHEATSHEET.md)，字体、图片和配色见 [docs/RESOURCES.md](docs/RESOURCES.md)。当前版本是 0.6.13。
+ 
+ `layer` 上的 `camera` 是这一层的镜头。不写时，有实体、`ground` 或 `rotateX`、`rotateY`、`z` 的最外层用自己的 `height` 当视距。形状写了正的 `depth` 就沿 z 挤出。另有 `sphere`、`torus`、`tube`、`model`。例子：`npx tsx src/cli.ts render examples/perspective.layer -o perspective.png`，`npx tsx src/cli.ts render examples/meshes.layer -o meshes.png`，`npx tsx src/cli.ts render examples/solids.layer -o solids.png`，`npx tsx src/cli.ts render examples/rounded.layer -o rounded.png`。
+ 
+diff --git a/SPEC.md b/SPEC.md
+index eaa970e..cf6368f 100644
+--- a/SPEC.md
++++ b/SPEC.md
+@@ -86,7 +86,7 @@ Flex Layer 用标签描述**一帧画面**。结构标签只有 `layer`。`div`
+ | 组件 | `arrow`。载入时注册，排版前展开成 `<g>`：一根 `line` 加一个张角 30° 的 `polygon`。`--emit` 仍写 `<arrow>` |
+ | 绘制 | `canvas`、`script`。见「蒙版和程序」 |
+ 
+-`style` 里认这些属性：`flex-direction`、`gap`、`row-gap`、`column-gap`、`flex-wrap`、`padding`、`align-items`、`align-self`、`align-content`、`justify-content`、`flex`、`flex-grow`、`flex-shrink`、`flex-basis`、`width`、`height`、`max-width`、`background`、`background-color`、`border`、`border-radius`、`font-size`、`font-weight`、`font-family`、`color`、`letter-spacing`、`fill`、`writing-mode`、`line-height`、`text-align`、`white-space`、`text-wrap`、`object-fit`、`object-position`，以及效果一节里的名字。不认识或写错的报 `invalid-attr`，该项退回 CSS 初始值。
++`style` 里认这些属性：`flex-direction`、`gap`、`row-gap`、`column-gap`、`flex-wrap`、`padding`、`align-items`、`align-self`、`align-content`、`justify-content`、`flex`、`flex-grow`、`flex-shrink`、`flex-basis`、`width`、`height`、`max-width`、`background`、`background-color`、`border`、`border-radius`、`font-size`、`font-weight`、`font-family`、`color`、`letter-spacing`、`fill`、`writing-mode`、`line-height`、`text-align`、`white-space`、`text-wrap`、`object-fit`、`object-position`、`translate`，以及效果一节里的名字。不认识或写错的报 `invalid-attr`，该项退回 CSS 初始值。
+ 
+ 和 CSS 不一样的地方：
+ 
+@@ -102,6 +102,8 @@ Flex Layer 用标签描述**一帧画面**。结构标签只有 `layer`。`div`
+ - `ChillDuanSans` 按可变字重绘制，字重轴约 300 到 800。登记了多档的取最近一档。只登记了一档的，请求别的字重仍用这一档。
+ - `letter-spacing` 可以写 `0`、`2px` 或 `0.05em`。`em` 按写这条声明的元素自己的字号换算。
+ - `text-align` 是 `left`、`center`、`right`。
++- 行内标签的 `translate`、`rotate`、`scale`、`opacity` 只影响绘制。`translate` 是 `x y`，可带 `px`；`rotate` 是 `12` 或 `12deg`；`scale` 是一个数或两个数。支点是这一段着墨框的中心。`opacity` 沿 span 链相乘。行宽、行高和折行按没变换的前进宽度算，后面的行留在原位，布局盒也不动。变换后的四边形并进这一行和文字盒子的着墨框。文字盒子自己的 `rotate`、`scale`、`opacity` 仍作用在整块盒子上。不给行内字加 `rotateX`、`rotateY`、`z`。
++- `split="chars"` 把这段文字按码位拆开，样式跟所在元素，owner 仍是原来那个有 `id` 的行内标签，不给每个字新 id。相邻标点要收成一次填充时，上面四项不同就保持分开。
+ 
+ 图标写 `<span class="material-symbols-outlined">home</span>`。字号和颜色跟周围的文字，字重写 `font-weight`，按 100 到 700 的整百取最近一档，两边一样近时用较轻的。`font-family` 写成 `Symbols`、`图标` 或 `material-symbols-outlined` 同样换。`material-symbols-rounded` 和 `material-symbols-sharp` 仍用这一套，并报 `invalid-attr`。对不上的名字报 `missing-icon`。
+ 
+@@ -241,6 +243,12 @@ npx flexlayer-select mask photo.jpg --point 820,640 --omit 900,1100 --refine
+ | 函数 | 作用 |
+ | --- | --- |
+ | `renderLayer(node, options?)` | 渲染一帧。`format: 'rgba'` 返回不预乘的原始像素 |
++| `createCanvas(width, height)` | 和排版同一份画布。离屏测量用这个，不要另装一份 `@napi-rs/canvas` |
++| `loadImage(src)` | 同一份绑定上的解码 |
++| `DEFAULT_FONT_FAMILY` | 默认字体名 |
++| `initFonts(families?)` | 先准备默认字体，再按名字准备目录里的字体。下载失败抛出 |
++| `applyCanvasFont(ctx, family, weight, size, style?)` | 把字重写进可变字体的 `wght` 轴。只写 `ctx.font` 时字重会被收成整百 |
++| `registerFontPath(family, file)` | 注册自定义字体文件。同名再注册不会换掉已经记住的文件 |
+ | `renderFrames(comp, { from, to, step, format })` | 异步迭代器，逐帧产出。`to` 含端点 |
+ | `renderComposition(comp)` | 一次返回全部 PNG、报告和联系表 |
+ | `random(seed)` | 固定的 `[0, 1)` |
+diff --git a/package-lock.json b/package-lock.json
+index 7a6903d..12296a8 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+   "name": "flexlayer",
+-  "version": "0.6.12",
++  "version": "0.6.13",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "flexlayer",
+-      "version": "0.6.12",
++      "version": "0.6.13",
+       "license": "MIT",
+       "dependencies": {
+         "@napi-rs/canvas": "^1.0.9",
+diff --git a/package.json b/package.json
+index 28d0c45..c1e070b 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "flexlayer",
+-  "version": "0.6.12",
++  "version": "0.6.13",
+   "engines": {
+     "node": ">=20"
+   },
+diff --git a/src/fonts.ts b/src/fonts.ts
+index e0240cf..64cd585 100644
+--- a/src/fonts.ts
++++ b/src/fonts.ts
+@@ -370,6 +370,15 @@ export function resolveOutlineFont(family: string | undefined, weight: number |
+   return { family: name, canvasFamily: name, weight: effectiveFontWeight(name, weight ?? 400) }
+ }
+ 
++/**
++ * 先保证默认字体，再按名字准备目录里的字体。
++ * 下载失败直接抛出。不认识的名字跳过。自定义文件用 registerFontPath。
++ */
++export function initFonts(families?: Iterable<string>): void {
++  ensureDefaultFontSync()
++  if (families) ensureBuiltinFontsSync(families)
++}
++
+ /** 测量用：若默认字体未注册则尝试读缓存路径（测试可预先放入字体） */
+ export async function initFontsForMeasure(options?: { fontsCacheDir?: string }): Promise<boolean> {
+   if (options?.fontsCacheDir) setFontsCacheDir(options.fontsCacheDir)
+diff --git a/src/index.ts b/src/index.ts
+index 326656a..24fb0a7 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -1,3 +1,5 @@
++export { createCanvas, loadImage } from '@napi-rs/canvas'
++export { applyCanvasFont, DEFAULT_FONT_FAMILY, initFonts, registerFontPath } from './fonts.js'
+ export { renderLayer, checkLayer, type RenderResult, type RgbaRenderResult } from './render.js'
+ export { canvas, create, type CreatedLayer, type MeshEdgeKind, type MeshPoint, type MeshProjectedEdge, type PlacedChar, type PlacedElement, type PlacedLine, type PlacedMask, type PlacedText } from './canvas.js'
+ export { registerComponent, arrowComponent, type ComponentFn, type ComponentProps } from './components.js'
+diff --git a/src/layout.ts b/src/layout.ts
+index 40f794a..7ef85ec 100644
+--- a/src/layout.ts
++++ b/src/layout.ts
+@@ -40,6 +40,7 @@ import {
+   parseNoise,
+   parseLineHeight,
+   parseLetterSpacing,
++  parseAngle,
+   parseNumber,
+   parseOverlay,
+   readFlexFactors,
+@@ -542,7 +543,7 @@ function readHtmlAppearance(style: Record<string, string>) {
+     borderRadius: parsePx(style['border-radius']) ?? 0,
+     background: style.background ?? style['background-color'],
+     opacity: parseNumber(style.opacity) ?? 1,
+-    rotate: parseNumber(style.rotate) ?? 0,
++    rotate: parseAngle(style.rotate) ?? 0,
+     rotateX: parseNumber(style.rotateX) ?? 0,
+     rotateY: parseNumber(style.rotateY) ?? 0,
+     z: parseNumber(style.z) ?? 0,
+diff --git a/src/paint.ts b/src/paint.ts
+index c69d386..7709dc3 100644
+--- a/src/paint.ts
++++ b/src/paint.ts
+@@ -8,6 +8,7 @@ import {
+ /** 运行时就是这份上下文。标准 2D 类型没有 `drawImage`。 */
+ type PaintCtx = SKRSContext2D
+ import { applyCanvasFont } from './fonts.js'
++import { textRunMotion } from './text.js'
+ import { backdropFilters, filtersPad, getFilter, orderedFilters } from './filter.js'
+ import { fitImageRect } from './image.js'
+ import { canvasPaint, isGradient } from './gradient.js'
+@@ -339,16 +340,37 @@ function drawTextNode(ctx: PaintCtx, node: TextLayoutNode, inkColor?: string) {
+       ctx.letterSpacing = `${seg.style.letterSpacing}px`
+       const color = inkColor ?? seg.style.fill ?? seg.style.color
+       const box = inkColor ? glyphRun : textPaintBox(node, color, glyphRun)
+-      fillTextPaint(ctx, seg.text, x, contentY + line.baselineY, color, box, seg.style.fontSize)
+-      if (seg.style.underline) {
+-        const y = contentY + line.baselineY + Math.max(1, seg.style.fontSize * 0.12)
+-        ctx.strokeStyle =
+-          !inkColor && isGradient(color) ? paintOf(ctx, color, box.x, box.y, Math.max(box.width, 1), Math.max(box.height, 1)) : color
+-        ctx.lineWidth = Math.max(1, seg.style.fontSize / 16)
+-        ctx.beginPath()
+-        ctx.moveTo(x, y)
+-        ctx.lineTo(x + seg.width, y)
+-        ctx.stroke()
++      const baseline = contentY + line.baselineY
++      const motion = textRunMotion(seg.style)
++      if (motion) ctx.save()
++      try {
++        if (motion && motion.opacity !== 1) ctx.globalAlpha *= motion.opacity
++        if (motion && (motion.tx !== 0 || motion.ty !== 0 || motion.rotate !== 0 || motion.sx !== 1 || motion.sy !== 1)) {
++          const metrics = ctx.measureText(seg.text)
++          const left = metrics.actualBoundingBoxLeft ?? 0
++          const right = metrics.actualBoundingBoxRight ?? metrics.width
++          const ascent = metrics.actualBoundingBoxAscent ?? seg.style.fontSize * 0.85
++          const descent = metrics.actualBoundingBoxDescent ?? seg.style.fontSize * 0.15
++          const cx = x - left + (left + right) / 2
++          const cy = baseline - ascent + (ascent + descent) / 2
++          ctx.translate(cx + motion.tx, cy + motion.ty)
++          ctx.rotate((motion.rotate * Math.PI) / 180)
++          ctx.scale(motion.sx, motion.sy)
++          ctx.translate(-cx, -cy)
++        }
++        fillTextPaint(ctx, seg.text, x, baseline, color, box, seg.style.fontSize)
++        if (seg.style.underline) {
++          const y = baseline + Math.max(1, seg.style.fontSize * 0.12)
++          ctx.strokeStyle =
++            !inkColor && isGradient(color) ? paintOf(ctx, color, box.x, box.y, Math.max(box.width, 1), Math.max(box.height, 1)) : color
++          ctx.lineWidth = Math.max(1, seg.style.fontSize / 16)
++          ctx.beginPath()
++          ctx.moveTo(x, y)
++          ctx.lineTo(x + seg.width, y)
++          ctx.stroke()
++        }
++      } finally {
++        if (motion) ctx.restore()
+       }
+     }
+   }
+diff --git a/src/style.ts b/src/style.ts
+index 0caf30c..b242d15 100644
+--- a/src/style.ts
++++ b/src/style.ts
+@@ -41,6 +41,28 @@ export function parseNumber(value: string | undefined): number | undefined {
+   return Number.isFinite(n) ? n : undefined
+ }
+ 
++/** 角度。`12` 或 `12deg`。无法解析返回 undefined。 */
++export function parseAngle(value: string | undefined): number | undefined {
++  if (value == null) return undefined
++  const m = /^\s*(-?\d*\.?\d+)\s*(deg)?\s*$/i.exec(value)
++  if (!m) return undefined
++  const n = Number.parseFloat(m[1]!)
++  return Number.isFinite(n) ? n : undefined
++}
++
++/** 行内平移。一个长度是 x，两个是 x y。可带 px。无法解析返回 undefined。 */
++export function parseTranslate(value: string | undefined): { x: number; y: number } | undefined {
++  if (value == null) return undefined
++  const parts = value.trim().split(/[\s,]+/).filter(Boolean)
++  if (parts.length === 0 || parts.length > 2) return undefined
++  const x = parsePx(parts[0])
++  if (x == null) return undefined
++  if (parts.length === 1) return { x, y: 0 }
++  const y = parsePx(parts[1])
++  if (y == null) return undefined
++  return { x, y }
++}
++
+ export type FlexFactors = { grow: number; shrink: number; basis: number | 'auto' }
+ 
+ function unitlessNumber(token: string): number | null {
+@@ -844,7 +866,8 @@ const STYLE_CHECKS: Record<string, (value: string) => StyleDiagnostic | null> =
+   background: () => null,
+   'background-color': () => null,
+   opacity: (value) => numberHint(value, '写成 0 到 1 的数字，例如 0.5'),
+-  rotate: (value) => numberHint(value, '写成角度，例如 12'),
++  rotate: (value) => (parseAngle(value) == null ? { hint: '写成角度，例如 12 或 12deg' } : null),
++  translate: (value) => (parseTranslate(value) == null ? { hint: '写成 0 40 或 0 40px' } : null),
+   rotateX: (value) => numberHint(value, '写成角度，例如 20'),
+   rotateY: (value) => numberHint(value, '写成角度，例如 20'),
+   z: (value) => numberHint(value, '写成像素，例如 40'),
+diff --git a/src/text.spec.ts b/src/text.spec.ts
+index c9a1b62..ba1d28e 100644
+--- a/src/text.spec.ts
++++ b/src/text.spec.ts
+@@ -1,11 +1,12 @@
+-import { createCanvas } from '@napi-rs/canvas'
+ import { beforeAll, describe, expect, it } from 'vitest'
+ import { homedir } from 'node:os'
+ import { join } from 'node:path'
+ import { applyCanvasFont, initFontsForMeasure } from './fonts.js'
++import { createCanvas, DEFAULT_FONT_FAMILY, initFonts } from './index.js'
+ import { layoutSource } from './layout.js'
++import { checkLayer, renderToCanvas } from './render.js'
+ import { layoutText } from './text.js'
+-import type { TextSegment } from './types.js'
++import type { TextLayoutNode, TextSegment } from './types.js'
+ 
+ const FONT_DIRS = [join(homedir(), '.cache', 'flexlayer', 'fonts'), '/tmp/flexlayer-test']
+ 
+@@ -243,3 +244,180 @@ describe('行内空白', () => {
+     expect(w450).toBeLessThan(200)
+   })
+ })
++
++async function textOf(source: string): Promise<TextLayoutNode> {
++  const doc = await layoutSource(source, process.cwd())
++  const node = doc.root.children[0]
++  if (!node || node.kind !== 'text') throw new Error('expected text')
++  return node
++}
++
++function opaqueBounds(canvas: { width: number; height: number; getContext(type: '2d'): { getImageData(x: number, y: number, w: number, h: number): { data: Uint8ClampedArray } } }) {
++  const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data
++  let minX = Infinity
++  let minY = Infinity
++  let maxX = -1
++  let maxY = -1
++  for (let y = 0; y < canvas.height; y++) {
++    for (let x = 0; x < canvas.width; x++) {
++      const i = (y * canvas.width + x) * 4
++      const r = data[i]!
++      const g = data[i + 1]!
++      const b = data[i + 2]!
++      const a = data[i + 3]!
++      if (a < 16 || (r > 250 && g > 250 && b > 250)) continue
++      minX = Math.min(minX, x)
++      minY = Math.min(minY, y)
++      maxX = Math.max(maxX, x)
++      maxY = Math.max(maxY, y)
++    }
++  }
++  return { minX, minY, maxX, maxY }
++}
++
++describe('行内绘制变换', () => {
++  it('平移不改行盒，着墨框跟着走', async () => {
++    if (!hasFont) return
++    const plain = `<layer width="320" height="200" safe="0" background="#fff"><p style="font-size:32px; line-height:40px; white-space:nowrap">上<br/>下</p></layer>`
++    const moved = `<layer width="320" height="200" safe="0" background="#fff"><p style="font-size:32px; line-height:40px; white-space:nowrap"><span style="translate:0 48px">上</span><br/>下</p></layer>`
++    const a = await textOf(plain)
++    const b = await textOf(moved)
++    expect(b.width).toBe(a.width)
++    expect(b.height).toBe(a.height)
++    expect(b.textLayout.lines[0]!.width).toBeCloseTo(a.textLayout.lines[0]!.width)
++    expect(b.textLayout.lines[0]!.height).toBeCloseTo(a.textLayout.lines[0]!.height)
++    expect(b.textLayout.lines[1]!.y).toBeCloseTo(a.textLayout.lines[1]!.y)
++    const plainBottom = a.textLayout.lines[0]!.ink.y + a.textLayout.lines[0]!.ink.height
++    const movedBottom = b.textLayout.lines[0]!.ink.y + b.textLayout.lines[0]!.ink.height
++    expect(b.textLayout.lines[0]!.ink.y).toBeGreaterThan(a.textLayout.lines[0]!.ink.y + 40)
++    expect(movedBottom).toBeGreaterThan(plainBottom + 40)
++    expect(b.ink.y + b.ink.height).toBeGreaterThanOrEqual(movedBottom - 0.5)
++  })
++
++  it('缩放不撑开下一行', async () => {
++    if (!hasFont) return
++    const plain = await textOf(
++      `<layer width="320" height="200" safe="0"><p style="font-size:32px; line-height:40px">字<br/>下</p></layer>`,
++    )
++    const scaled = await textOf(
++      `<layer width="320" height="200" safe="0"><p style="font-size:32px; line-height:40px"><span style="scale:2">字</span><br/>下</p></layer>`,
++    )
++    expect(scaled.textLayout.contentWidth).toBeCloseTo(plain.textLayout.contentWidth)
++    expect(scaled.textLayout.lines[1]!.y).toBeCloseTo(plain.textLayout.lines[1]!.y)
++    expect(scaled.height).toBeCloseTo(plain.height)
++    expect(scaled.textLayout.lines[0]!.ink.height).toBeGreaterThan(plain.textLayout.lines[0]!.ink.height * 1.5)
++  })
++
++  it('段落的旋转不写进行内片段', async () => {
++    if (!hasFont) return
++    const node = await textOf(`<layer width="320" height="80" safe="0"><p style="rotate:12deg; font-size:32px">AB<span>C</span></p></layer>`)
++    expect(node.rotate).toBe(12)
++    for (const seg of node.textLayout.lines[0]!.segments) expect(seg.style.rotate).toBeUndefined()
++  })
++
++  it('不同角度的标点不会收成一次填充', async () => {
++    if (!hasFont) return
++    const node = await textOf(
++      `<layer width="320" height="80" safe="0"><p style="font-size:32px; white-space:nowrap">你<span style="rotate:20deg">，</span></p></layer>`,
++    )
++    const texts = node.textLayout.lines[0]!.segments.map((seg) => seg.text)
++    expect(texts).toContain('，')
++    expect(texts.join('')).toBe('你，')
++    const comma = node.textLayout.lines[0]!.segments.find((seg) => seg.text === '，')
++    expect(comma?.style.rotate).toBe(20)
++  })
++
++  it('透明度沿 span 相乘', async () => {
++    if (!hasFont) return
++    const node = await textOf(
++      `<layer width="200" height="80" safe="0"><p style="font-size:32px"><span style="opacity:0.5"><em style="opacity:0.4">A</em></span></p></layer>`,
++    )
++    expect(node.textLayout.lines[0]!.segments[0]!.style.opacity).toBeCloseTo(0.2)
++  })
++
++  it('split=chars 沿用原来的 owner', async () => {
++    if (!hasFont) return
++    const node = await textOf(
++      `<layer width="320" height="80" safe="0"><p style="font-size:32px; white-space:nowrap"><span id="w" split="chars">Hi</span></p></layer>`,
++    )
++    const segs = node.textLayout.lines.flatMap((line) => line.segments)
++    expect(segs.map((seg) => seg.text)).toEqual(['H', 'i'])
++    expect(new Set(segs.map((seg) => seg.owner?.id))).toEqual(new Set(['w']))
++    expect(new Set(segs.map((seg) => seg.owner?.path)).size).toBe(1)
++    const punct = await textOf(
++      `<layer width="320" height="80" safe="0"><p style="font-size:32px; white-space:nowrap"><span id="w" split="chars">你，</span></p></layer>`,
++    )
++    const parts = punct.textLayout.lines.flatMap((line) => line.segments)
++    expect(parts.every((seg) => seg.owner?.id === 'w')).toBe(true)
++    expect(new Set(parts.map((seg) => seg.owner?.path)).size).toBe(1)
++    expect(parts[0]!.owner?.path).toBe(segs[0]!.owner?.path)
++  })
++
++  it('竖排的平移不改变列高', async () => {
++    if (!hasFont) return
++    const plain = layoutText({
++      segments: [{ text: '竖', style: baseStyle }],
++      writingMode: 'vertical-rl',
++      lineHeightRatio: 1,
++      fontSize: 40,
++    })
++    const moved = layoutText({
++      segments: [{ text: '竖', style: { ...baseStyle, translateX: 30 } }],
++      writingMode: 'vertical-rl',
++      lineHeightRatio: 1,
++      fontSize: 40,
++    })
++    expect(moved.contentHeight).toBeCloseTo(plain.contentHeight)
++    expect(moved.lines[0]!.height).toBeCloseTo(plain.lines[0]!.height)
++    expect(moved.ink.x).toBeGreaterThan(plain.ink.x + 20)
++  })
++
++  it('转出画布的角报 overflow-canvas，布局盒仍在里面', async () => {
++    if (!hasFont) return
++    const source = `<layer width="180" height="80" safe="0" background="#fff"><p style="font-size:32px"><span style="translate:0 120px">字</span></p></layer>`
++    const stayed = await checkLayer(
++      `<layer width="180" height="80" safe="0" background="#fff"><p style="font-size:32px">字</p></layer>`,
++    )
++    const report = await checkLayer(source)
++    expect(stayed.issues.some((issue) => issue.code === 'overflow-canvas')).toBe(false)
++    expect(report.issues.some((issue) => issue.code === 'overflow-canvas')).toBe(true)
++    const text = report.elements.find((el) => el.tag === 'p')
++    expect(text).toBeTruthy()
++    expect(text!.box.y + text!.box.height).toBeLessThanOrEqual(80)
++    expect(text!.ink.bottom).toBeGreaterThan(80)
++  })
++
++  it('画出来的字跟着平移', async () => {
++    if (!hasFont) return
++    const plain = await renderToCanvas(
++      `<layer width="200" height="180" background="#ffffff"><p style="font-size:40px; color:#000">字</p></layer>`,
++    )
++    const moved = await renderToCanvas(
++      `<layer width="200" height="180" background="#ffffff"><p style="font-size:40px; color:#000"><span style="translate:0 40px">字</span></p></layer>`,
++    )
++    const a = opaqueBounds(plain.canvas)
++    const b = opaqueBounds(moved.canvas)
++    expect(b.minY).toBeGreaterThan(a.minY + 30)
++    expect(Math.abs(b.minX - a.minX)).toBeLessThan(4)
++  })
++})
++
++describe('字体入口', () => {
++  it('导出同一份画布和字体准备，不导出 GlobalFonts', async () => {
++    const api = await import('./index.js')
++    expect(api).not.toHaveProperty('GlobalFonts')
++    expect(api.DEFAULT_FONT_FAMILY).toBe(DEFAULT_FONT_FAMILY)
++    expect(typeof api.createCanvas).toBe('function')
++    expect(typeof api.loadImage).toBe('function')
++    expect(typeof api.applyCanvasFont).toBe('function')
++    expect(typeof api.registerFontPath).toBe('function')
++    initFonts()
++    const ctx = createCanvas(100, 100).getContext('2d')
++    applyCanvasFont(ctx, DEFAULT_FONT_FAMILY, 450, 40)
++    const measured = ctx.measureText('黑8').width
++    const node = await textOf(
++      `<layer width="400" height="80" safe="0"><p style="font-size:40px; font-weight:450; white-space:nowrap">黑8</p></layer>`,
++    )
++    expect(Math.abs(node.textLayout.contentWidth - measured)).toBeLessThan(1)
++  })
++})
+diff --git a/src/text.ts b/src/text.ts
+index 01d3273..6f1a9d5 100644
+--- a/src/text.ts
++++ b/src/text.ts
+@@ -2,8 +2,9 @@ import { createRequire } from 'node:module'
+ import type { LayerChild, LayerNode } from './parse.js'
+ import { applyCanvasFont } from './fonts.js'
+ import { applySymbolsClass, classAttr, rewriteIconLigatures, symbolsClassNotes, type SymbolsNote } from './icons.js'
++import { applyToBox, aroundPivot, multiply, translated } from './matrix.js'
+ import { getMeasureCtx } from './measureCtx.js'
+-import { parseFontWeight, parseLetterSpacing, parsePx } from './style.js'
++import { parseAngle, parseFontWeight, parseLetterSpacing, parseNumber, parsePx, parseScale, parseTranslate } from './style.js'
+ import { emptyBox, translateBox, unionBoxes, type Box, type InlineOwner, type TextLayoutResult, type TextRunStyle, type TextSegment } from './types.js'
+ 
+ const require = createRequire(import.meta.url)
+@@ -83,6 +84,21 @@ function mergeStyle(base: TextRunStyle, styleMap: Record<string, string>, inline
+       next.background = styleMap['background-color'].trim()
+       next.backgroundProp = 'background-color'
+     }
++    const shift = parseTranslate(styleMap.translate)
++    if (shift) {
++      next.translateX = shift.x
++      next.translateY = shift.y
++    }
++    const rotate = parseAngle(styleMap.rotate)
++    if (rotate != null) next.rotate = rotate
++    const scaleToken = styleMap.scale?.trim().split(/[\s,]+/).filter(Boolean)[0]
++    if (scaleToken != null && parseNumber(scaleToken) != null) {
++      const scale = parseScale(styleMap.scale)
++      next.scaleX = scale.x
++      next.scaleY = scale.y
++    }
++    const opacity = parseNumber(styleMap.opacity)
++    if (opacity != null) next.opacity = (base.opacity ?? 1) * opacity
+   }
+   return next
+ }
+@@ -134,6 +150,10 @@ function normalizeInlineSegments(segs: TextSegment[]): TextSegment[] {
+   return next.filter((seg) => seg.text.length > 0)
+ }
+ 
++function charSplit(attrs: Record<string, string> | undefined): boolean {
++  return attrs?.split?.trim().toLowerCase() === 'chars'
++}
++
+ function walkInline(
+   nodes: LayerChild[],
+   style: TextRunStyle,
+@@ -143,6 +163,7 @@ function walkInline(
+   inherited: InlineOwner | undefined,
+   imageSize?: (node: LayerNode, path: string) => TextSegment['atom'],
+   onSymbols?: (notes: SymbolsNote[], path: string) => void,
++  splitChars = false,
+ ): void {
+   let breakNext = hardBreakNext
+   let elementIndex = 0
+@@ -163,7 +184,13 @@ function walkInline(
+             parentPath,
+           )
+         }
+-        out.push({ text: icon.text, style, hardBreakBefore: breakNext, owner: inherited })
++        const pieces = splitChars ? Array.from(icon.text) : [icon.text]
++        let first = true
++        for (const piece of pieces) {
++          if (!piece) continue
++          out.push({ text: piece, style, hardBreakBefore: first && breakNext, owner: inherited })
++          first = false
++        }
+       }
+       breakNext = false
+       continue
+@@ -198,7 +225,7 @@ function walkInline(
+     if (notes.length > 0) onSymbols?.(notes, path)
+     const id = child.attrs.id?.trim()
+     const owner = id ? { id, path, tag } : inherited
+-    walkInline(child.children, segStyle, out, breakNext, path, owner, imageSize, onSymbols)
++    walkInline(child.children, segStyle, out, breakNext, path, owner, imageSize, onSymbols, splitChars || charSplit(child.attrs))
+     breakNext = false
+   }
+ }
+@@ -230,7 +257,7 @@ export function extractTextSegments(
+   const notes = symbolsClassNotes(classAttr(node.attrs))
+   if (notes.length > 0) onSymbols?.(notes, parentPath)
+   const segs: TextSegment[] = []
+-  walkInline(node.children, style, segs, false, parentPath, undefined, imageSize, onSymbols)
++  walkInline(node.children, style, segs, false, parentPath, undefined, imageSize, onSymbols, charSplit(node.attrs))
+   return normalizeInlineSegments(segs)
+ }
+ 
+@@ -251,6 +278,44 @@ function sameOwner(a: InlineOwner | undefined, b: InlineOwner | undefined): bool
+   return a?.path === b?.path
+ }
+ 
++function paintNum(value: number | undefined, fallback: number): number {
++  return value ?? fallback
++}
++
++/** 相邻片段收成一次 fillText 时，这四项不同就不能并。 */
++function samePaintTransform(a: TextRunStyle, b: TextRunStyle): boolean {
++  return (
++    paintNum(a.translateX, 0) === paintNum(b.translateX, 0) &&
++    paintNum(a.translateY, 0) === paintNum(b.translateY, 0) &&
++    paintNum(a.rotate, 0) === paintNum(b.rotate, 0) &&
++    paintNum(a.scaleX, 1) === paintNum(b.scaleX, 1) &&
++    paintNum(a.scaleY, 1) === paintNum(b.scaleY, 1) &&
++    paintNum(a.opacity, 1) === paintNum(b.opacity, 1)
++  )
++}
++
++/** 行内绘制变换。没有平移、旋转、缩放，且不改透明度时返回 null。 */
++export function textRunMotion(style: TextRunStyle): { tx: number; ty: number; rotate: number; sx: number; sy: number; opacity: number } | null {
++  const tx = paintNum(style.translateX, 0)
++  const ty = paintNum(style.translateY, 0)
++  const rotate = paintNum(style.rotate, 0)
++  const sx = paintNum(style.scaleX, 1)
++  const sy = paintNum(style.scaleY, 1)
++  const opacity = paintNum(style.opacity, 1)
++  if (tx === 0 && ty === 0 && rotate === 0 && sx === 1 && sy === 1 && opacity === 1) return null
++  return { tx, ty, rotate, sx, sy, opacity }
++}
++
++/** 绕着墨框中心缩放、旋转，再平移。行宽和行高不用这个盒子。 */
++export function mapGlyphInk(box: Box, style: TextRunStyle): Box {
++  const motion = textRunMotion(style)
++  if (!motion || (motion.tx === 0 && motion.ty === 0 && motion.rotate === 0 && motion.sx === 1 && motion.sy === 1)) return box
++  const cx = box.x + box.width / 2
++  const cy = box.y + box.height / 2
++  const matrix = multiply(translated(motion.tx, motion.ty), aroundPivot(cx, cy, motion.rotate, motion.sx, motion.sy))
++  return applyToBox(matrix, box)
++}
++
+ function measureTextWidth(text: string, style: TextRunStyle): number {
+   if (!text) return 0
+   const key = `${style.fontFamily}|${style.fontWeight}|${style.fontStyle ?? ''}|${style.fontSize}|${style.letterSpacing}|${text}`
+@@ -440,14 +505,26 @@ function glueUnits(lineUnits: Unit[]): Unit[] {
+     let style = u.style
+     if (!u.atom && i + 1 < end) {
+       const next = lineUnits[i + 1]!
+-      if (!next.atom && LINE_TAIL_FORBIDDEN.has(u.text.slice(-1)!) && !next.isSpace && sameOwner(u.owner, next.owner)) {
++      if (
++        !next.atom &&
++        LINE_TAIL_FORBIDDEN.has(u.text.slice(-1)!) &&
++        !next.isSpace &&
++        sameOwner(u.owner, next.owner) &&
++        samePaintTransform(u.style, next.style)
++      ) {
+         text += next.text
+         i++
+       }
+     }
+     if (!u.atom && out.length > 0) {
+       const prev = out[out.length - 1]!
+-      if (!prev.atom && LINE_HEAD_FORBIDDEN.has(text[0]!) && !prev.isSpace && sameOwner(prev.owner, u.owner)) {
++      if (
++        !prev.atom &&
++        LINE_HEAD_FORBIDDEN.has(text[0]!) &&
++        !prev.isSpace &&
++        sameOwner(prev.owner, u.owner) &&
++        samePaintTransform(prev.style, style)
++      ) {
+         out[out.length - 1] = {
+           ...prev,
+           text: prev.text + text,
+@@ -685,7 +762,7 @@ function layoutVertical(opts: LayoutTextOptions): TextLayoutResult {
+       const glyphX = x0 + (columnWidth - glyph.width) / 2
+       const lineInk = /\s/.test(glyph.text)
+         ? { x: glyphX, y: baselineY, width: 0, height: 0 }
+-        : glyphInk(glyphX, baselineY, glyph)
++        : mapGlyphInk(glyphInk(glyphX, baselineY, glyph), glyph.drawStyle)
+       ink = addInk(ink, lineInk)
+       laidLines.push({
+         segments: [{ text: glyph.text, style: glyph.drawStyle, x: glyphX, width: glyph.width, owner: glyph.owner }],
+@@ -804,7 +881,7 @@ export function layoutText(opts: LayoutTextOptions): TextLayoutResult {
+         continue
+       }
+       if (item.unit.isSpace || item.unit.text === '\uFFFC') continue
+-      lineInk = addInk(lineInk, glyphInk(item.x, baselineY, item.metrics))
++      lineInk = addInk(lineInk, mapGlyphInk(glyphInk(item.x, baselineY, item.metrics), item.unit.style))
+     }
+     const resolvedInk = lineInk ?? { x: 0, y: baselineY, width: 0, height: 0 }
+     ink = addInk(ink, resolvedInk)
+diff --git a/src/types.ts b/src/types.ts
+index ddae820..1504d81 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -291,6 +291,16 @@ export type TextRunStyle = {
+   background?: string
+   /** 行内背景来自 background 还是 background-color。排版后去掉。 */
+   backgroundProp?: 'background' | 'background-color'
++  /** 行内绘制平移，像素。不参与行宽、行高和折行。 */
++  translateX?: number
++  translateY?: number
++  /** 行内绘制旋转，度。支点是这一段着墨框的中心。 */
++  rotate?: number
++  /** 行内绘制缩放。省略是 1。 */
++  scaleX?: number
++  scaleY?: number
++  /** 行内绘制透明度，沿 span 链相乘。省略是 1。 */
++  opacity?: number
+ }
+ 
+ /** 带 id 的行内标签。最内层有 id 的那段拥有这些字；里面没写 id 的行内标签沿用外层。 */
+-- 
+2.43.0
+
