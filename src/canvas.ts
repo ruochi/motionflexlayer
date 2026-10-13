@@ -1,11 +1,17 @@
-import { existsSync, realpathSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { renderLayer, type SKRSContext2D } from 'flexlayer'
+import {
+  applyCanvasFont,
+  createCanvas as createFlexCanvas,
+  DEFAULT_FONT_FAMILY,
+  initFonts,
+  loadImage as loadFlexImage,
+  registerFontPath,
+  type SKRSContext2D,
+} from 'flexlayer'
 
-/** flexlayer 的默认字体，可变字重。draw 里写 ctx.font 用它和画面其余文字一致。 */
-export const DEFAULT_FONT = 'ChillDuanSans'
+/** flexlayer 的默认字体。离屏测量和绘制用 applyCanvasFont，字重才会进可变字体的 wght 轴。 */
+export const DEFAULT_FONT = DEFAULT_FONT_FAMILY
+
+export { applyCanvasFont, initFonts, DEFAULT_FONT_FAMILY }
 
 /** 绘图上下文。flexlayer 导出的是 napi 的完整 2D 类型，包含 drawImage。 */
 export type Canvas2D = SKRSContext2D
@@ -19,56 +25,23 @@ export type OffscreenCanvas = {
 
 export type LoadedImage = { width: number; height: number }
 
-type NapiCanvas = {
-  createCanvas(width: number, height: number): OffscreenCanvas
-  loadImage(src: string | Buffer): Promise<LoadedImage>
-  GlobalFonts: { registerFromPath(path: string, family?: string): unknown }
-}
-
-function findPackageDir(name: string): string {
-  let dir = dirname(fileURLToPath(import.meta.url))
-  for (;;) {
-    const candidate = join(dir, 'node_modules', name)
-    if (existsSync(join(candidate, 'package.json'))) return realpathSync(candidate)
-    const up = dirname(dir)
-    if (up === dir) break
-    dir = up
-  }
-  throw new Error(`找不到依赖 ${name}`)
-}
-
-let napi: NapiCanvas | undefined
-
-/**
- * 和 flexlayer 共用同一份 @napi-rs/canvas。两份实例的字体注册表互不相通，
- * 自己再装一份会导致 draw 里量出来的字和 flexlayer 排版的字不一致。
- */
-function canvasModule(): NapiCanvas {
-  if (!napi) {
-    const req = createRequire(join(findPackageDir('flexlayer'), 'package.json'))
-    napi = req('@napi-rs/canvas') as NapiCanvas
-  }
-  return napi
-}
-
-/** 离屏画布。预计算（文字采样、噪声贴图、缓存的笔刷）用。 */
+/** 和 flexlayer 排版同一份画布。 */
 export function createCanvas(width: number, height: number): OffscreenCanvas {
-  return canvasModule().createCanvas(Math.max(1, Math.ceil(width)), Math.max(1, Math.ceil(height)))
+  return createFlexCanvas(Math.max(1, Math.ceil(width)), Math.max(1, Math.ceil(height)))
 }
 
 export function loadImage(src: string | Buffer): Promise<LoadedImage> {
-  return canvasModule().loadImage(src)
+  return loadFlexImage(src)
 }
 
-/** 注册字体文件，draw 里可以用这个 family。markup 里的文字仍用 <font> 声明。 */
+/** 注册自定义字体文件。同名再注册不会换掉 flexlayer 已经记住的文件。 */
 export function registerFont(path: string, family?: string): void {
-  canvasModule().GlobalFonts.registerFromPath(path, family)
+  const name = family?.trim()
+  if (!name) throw new Error('registerFont 需要 family，自定义文件用新的字体名')
+  registerFontPath(name, path)
 }
 
-let fontsReady: Promise<void> | undefined
-
-/** 确保默认字体已下载并注册。在 setup 里量字、采样文字之前调用。 */
-export function ensureFonts(): Promise<void> {
-  fontsReady ??= renderLayer('<layer width="1" height="1"></layer>').then(() => undefined)
-  return fontsReady
+/** 下载并注册默认字体，再按名字准备目录里的字体。下载失败或名字没登记会抛出。 */
+export function ensureFonts(families?: Iterable<string>): Promise<void> {
+  return initFonts(families)
 }

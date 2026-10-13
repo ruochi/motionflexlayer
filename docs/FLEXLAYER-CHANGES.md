@@ -4,17 +4,17 @@
 
 motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做法。改完一项，motionflexlayer 删一段绕路代码。
 
-**状态核对于 flexlayer 0.6.12（493c3cc）。** 第 1、3、4、5、6、8、13、15、16、18、19、20、21 项已完成，motionflexlayer 已删掉对应的绕路代码；第 17 项部分完成。第 2 项（导出字体与 canvas）和第 7 项（行内 span 变换）仍未做。第 4 项没有按下面的 `bleed` / `profile` 方案做，而是换成了更好的 `view` 取景：取景窗裁掉的不报 `overflow-canvas`，最小字号按屏幕上的大小和短边算。`ink-stroke` 在 0.2.46 并入 `stroke`，示例已改。0.3.0 起 `renderFvg` / `checkFvg` / `FvgNode` 改名为 `renderLayer` / `checkLayer` / `LayerNode`。0.4.0 删掉了 `perspective`，镜头只写 `camera`；没写 `camera` 时，带网格、`ground` 或 `rotateX` / `rotateY` / `z` 的最外层用自己的高度当视距。0.5.0 删掉 `<draw>` 和 `draw` 回调，自定义像素改成 `<canvas>` 和 `<script>`。0.6.0 起 HTML 默认值和浏览器一致（`align-items` / `align-content` 为 `stretch`，`flex-shrink` 为 1，`text-wrap` 为 `wrap`，初始字号 16px，宽高是内容盒）。`box`、`cylinder`、`extrude` 仍能画，但报 `non-canonical`；正的 `depth` 写在 `rect`、`circle`、`path` 上。
+**状态核对于 flexlayer 0.6.14（4a5515b）。** 第 1、2、3、4、5、6、7、8、13、15、16、18、19、20、21 项已完成，motionflexlayer 已删掉对应的绕路代码；第 17 项部分完成。第 4 项没有按下面的 `bleed` / `profile` 方案做，而是换成了更好的 `view` 取景：取景窗裁掉的不报 `overflow-canvas`，最小字号按屏幕上的大小和短边算。`ink-stroke` 在 0.2.46 并入 `stroke`，示例已改。0.3.0 起 `renderFvg` / `checkFvg` / `FvgNode` 改名为 `renderLayer` / `checkLayer` / `LayerNode`。0.4.0 删掉了 `perspective`，镜头只写 `camera`；没写 `camera` 时，带网格、`ground` 或 `rotateX` / `rotateY` / `z` 的最外层用自己的高度当视距。0.5.0 删掉 `<draw>` 和 `draw` 回调，自定义像素改成 `<canvas>` 和 `<script>`。0.6.0 起 HTML 默认值和浏览器一致（`align-items` / `align-content` 为 `stretch`，`flex-shrink` 为 1，`text-wrap` 为 `wrap`，初始字号 16px，宽高是内容盒）。`box`、`cylinder`、`extrude` 仍能画，但报 `non-canonical`；正的 `depth` 写在 `rect`、`circle`、`path` 上。
 
 | # | 优先级 | 改动 | 状态 | motionflexlayer 里受影响的代码 |
 | --- | --- | --- | --- | --- |
 | 1 | P0 | 打包：`prepare` + `files` | ✅ 已完成 | 依赖已改成 `github:ruochi/flexlayer#<commit>` |
-| 2 | P0 | 导出字体与 canvas | 未做 | `src/canvas.ts` 整个文件 |
+| 2 | P0 | 导出字体与 canvas | ✅ 已完成（0.6.14）：`createCanvas`、`loadImage`、`DEFAULT_FONT_FAMILY`、`initFonts`、`applyCanvasFont`、`registerFontPath`。不导出 `GlobalFonts` | `src/canvas.ts` 改为这些正式导出 |
 | 3 | P0 | `draw` 的 ctx 类型补全 | ✅ 已完成（0.6.12 导出 `SKRSContext2D`；0.5.0 起 draw 改为 canvas + script） | `src/paint.ts` 的 `DrawFn` |
 | 4 | P1 | 动画用的检查配置 | ✅ 已完成：`view` 取景 + 屏幕字号（0.2.22、0.2.30） | 示例里的 `lint.ignore` 已全部删掉；`camera()` 换成 `shot()` |
 | 5 | P1 | `origin` 支持任意点 | ✅ 已完成（0.2.19） | `place()` 的 `origin` 接受 `[x, y]` |
 | 6 | P1 | 离屏画布按可见区域裁剪 | ✅ 已完成（0.2.58） | `MOTION.md` 里这条限制已撤掉 |
-| 7 | P1 | 行内 `span` 的变换与透明度 | 未做（文字整段可以 `style="scale:…"`） | `src/drawkit.ts` 的 `drawGlyphs` |
+| 7 | P1 | 行内 `span` 的变换与透明度 | ✅ 已完成（0.6.14）：`style` 里的 `translate`、`rotate`、`scale`、`opacity`，以及 `split="chars"` | `drawGlyphs` 仍留给 canvas 脚本 |
 | 8 | P0 | 原始像素输出 | ✅ 已完成：`renderFrames({ format: 'rgba' })` | `src/render/raw.ts` 已删除 |
 | 9 | P1 | 成组透明度 | 未做 | 无（现在没有绕路，只能接受瑕疵） |
 | 10 | P2 | `draw` 里查询其它元素的盒子 | 未做 | 示例里手算的坐标 |
@@ -36,7 +36,9 @@ motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做
 
 flexlayer 现在有 `prepare` 和 `files`，`npm install github:ruochi/flexlayer` 会自动构建。motionflexlayer 的依赖已改成 `"flexlayer": "github:ruochi/flexlayer#<commit>"`，不再要求两个仓库放在同一级目录。
 
-## 2. 导出字体与 canvas（P0）
+## 2. 导出字体与 canvas（P0，✅ 0.6.14 已完成）
+
+主入口导出 `createCanvas`、`loadImage`、`DEFAULT_FONT_FAMILY`、`initFonts(families?)`、`applyCanvasFont`、`registerFontPath`。`initFonts` 先准备默认字体，再按名字准备目录里的字体，下载失败直接抛出。不导出 `GlobalFonts`。`src/canvas.ts` 只重新导出这一份绑定。下面是当时的问题和曾经建议过的更宽接口。
 
 **问题。**
 
@@ -116,7 +118,9 @@ motionflexlayer 的 `place()` 的 `origin` 接受 `'120 80'` 或 `[x, y]`。`sho
 
 **验收。** 一个带 `mask` 的 400×300 layer，放在 `scale="16"` 的父层里。修改前后渲染结果逐像素一致，16× 时的耗时和 1× 相差不超过 20ms。
 
-## 7. 行内 `span` 的变换与透明度（P1）
+## 7. 行内 `span` 的变换与透明度（P1，✅ 0.6.14 已完成）
+
+行内 `translate`、`rotate`、`scale`、`opacity` 写在 `style` 里，只影响绘制。行宽、行高和折行按没变换的前进宽度算，布局盒留在原位。变换后的四边形并进这一行和文字盒子的着墨框。`split="chars"` 按码位拆开，沿用原来的 owner。`drawGlyphs` 保留给 canvas 脚本。下面是当时的问题。
 
 **问题。** 逐字动画是动效里最常见的手法：每个字错开入场、波浪、逐字变色放大。flexlayer 的 HTML 文字只能整段做变换。motionflexlayer 现在有两种退路：
 

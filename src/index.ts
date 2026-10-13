@@ -83,7 +83,18 @@ export {
   type DrawGlyphsOptions,
   type TextPointsOptions,
 } from './drawkit.js'
-export { DEFAULT_FONT, createCanvas, loadImage, registerFont, ensureFonts, type Canvas2D, type OffscreenCanvas } from './canvas.js'
+export {
+  DEFAULT_FONT,
+  DEFAULT_FONT_FAMILY,
+  applyCanvasFont,
+  initFonts,
+  createCanvas,
+  loadImage,
+  registerFont,
+  ensureFonts,
+  type Canvas2D,
+  type OffscreenCanvas,
+} from './canvas.js'
 export { renderFrame, renderRgba, type FrameResult, type RgbaFrame } from './render/frame.js'
 export { renderStills, contactSheet, type StillsOptions, type StillsResult } from './render/stills.js'
 export { renderVideo, type VideoOptions, type VideoResult } from './render/video.js'

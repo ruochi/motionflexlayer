@@ -78,7 +78,7 @@
 | 章节、字幕、标注写在取景窗外 | 把字幕放进舞台层，跟着镜头一起放大 | 取景窗外用成片像素；要跟住舞台上的一点用 `cam.toScreen(x, y)` | 字幕跟着推近、震动，读不清 |
 | 推得很近时，模糊和蒙版跟着可见区域走 | 自己按放大倍数再开一张全尺寸离屏 | 直接写 `blur`、`grade`、`mask`。flexlayer 0.2.58 起离屏只光栅化落在画面里的一块 | 整张元素按放大倍数分配，16 倍时多出几百毫秒 |
 | 动画文字不换行 | 让 `p` 自动折行 | `text()` 默认 `white-space:nowrap` | 字距、字号变化时整段重排，画面跳动 |
-| 逐字动画放在 `draw` 里 | 给 `span` 写 `transform` | `drawGlyphs(ctx, str, { each })` | `span` 不支持变换，属性被忽略 |
+| 段落里的逐字动画写在 `style` | 把会折行的标题放进 `drawGlyphs`，或给 `span` 写 HTML 属性 `rotate` | `style` 里写 `translate`、`rotate`、`scale`、`opacity`；要逐字拆开写 `split="chars"` | 行内变换只影响绘制，折行、发光和着墨框仍在文字节点里。`drawGlyphs` 留给 canvas 脚本 |
 | 在 `canvas.create` 的结果里按 id 找字 | 按原文的序号数 `lines[].chars` | 要找的字包一层 `<span id="here">`，取 `chars.filter((c) => c.id === 'here')` | 折行处的空格不占格，序号会错开；竖排时 `lines` 是一格一项，按 `x` 分列 |
 | `draw` 里不重置变换 | `ctx.setTransform(1, 0, 0, 1, 0, 0)`、`ctx.reset()` | 用 `ctx.save()` / `translate` / `restore()` | 破坏 flexlayer 的定位和 `scale` 倍率，导出半分辨率时位置错乱 |
 | `draw` 里不分配大对象 | 每帧 `createCanvas(1920, 1080)` | 在模块顶层或 `setup` 里建好，复用 | 内存上涨，越来越慢 |
@@ -288,7 +288,7 @@ npm run mfl -- render comp.ts                 # 成片
 - `strokeGlow(ctx, path, { color, width, glow })`：发光描边。
 - `glowDot(ctx, x, y, r, color, alpha)`：径向光点。
 - `sampleTextPoints(str, { font, width, height, step })`：把文字采样成点。
-- `createCanvas(w, h)`：离屏画布。
+- `createCanvas(w, h)`：离屏画布，和 flexlayer 同一份绑定。量字前 `await ensureFonts()`，再用 `applyCanvasFont` 写上字体。
 - `rgba(hex, a)`、`mixColor(a, b, k)`、`colorRamp(stops, k)`：颜色。
 
 **随机：**
