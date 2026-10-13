@@ -62,7 +62,7 @@ export type DrawGlyphsOptions = {
 
 /**
  * 逐字绘制，每个字可以单独位移、旋转、缩放、换色。
- * flexlayer 的 HTML 文字只能整段做变换，逐字动画在 draw 里用它。
+ * 会折行的标题写在文字节点的 style 里。这里留给 canvas 脚本里的场景。
  */
 export function drawGlyphs(ctx: Canvas2D, str: string, opts: DrawGlyphsOptions): Glyph[] {
   ctx.save()
