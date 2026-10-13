@@ -5,6 +5,7 @@ import { AudioFrame, type Envelopes } from './audio/envelopes.js'
 import type { AudioSpec } from './audio/types.js'
 import { ensureFonts } from './canvas.js'
 import { Timeline, type SectionState } from './timeline.js'
+import { subtitleAt, type SubtitleNow, type SubtitleTrack } from './voice/narration.js'
 
 /** 帧函数拿到的一切。t 是唯一的真相，其余都由 t 推出。 */
 export type Frame = {
@@ -25,6 +26,11 @@ export type Frame = {
   section?: SectionState
   /** 音轨读数（电平、起音）。只有合成写了 envelopes: true 才有。 */
   audio?: AudioFrame
+  /**
+   * 这一帧的字幕。只有合成写了 `subtitles` 才有。
+   * 每个字带自己的时间和进度，没有颜色、字号、位置。
+   */
+  subtitle?: SubtitleNow
 }
 
 export type RenderOutput = FvgChild | null | undefined | false | readonly RenderOutput[]
@@ -61,6 +67,11 @@ export type CompositionSpec = {
   baseDir?: string
   /** 每个进程开始渲染前调用一次。放预计算：粒子模拟、文字采样、读数据。 */
   setup?: () => void | Promise<void>
+  /**
+   * 字幕轨。逐字时间，没有样式。`render` 里从 `f.subtitle` 读，想怎么画就怎么画。
+   * `subs` 和 `render` 会把它写成 `.vtt`（一句一条）和 `.subs.json`（逐字）。
+   */
+  subtitles?: SubtitleTrack
   /** t → 画面。必须是纯函数：同一个 t 永远给出同一帧。 */
   render: (f: Frame) => RenderOutput | Promise<RenderOutput>
 }
@@ -110,6 +121,7 @@ export function frameAt(comp: Composition, t: number): Frame {
     beat: comp.tl.beatAt(t),
     section: comp.tl.sectionAt(t),
     audio: env ? new AudioFrame(env, t) : undefined,
+    subtitle: comp.subtitles ? subtitleAt(comp.subtitles, t) : undefined,
   }
 }
 

@@ -28,7 +28,7 @@ export default defineComposition({
 其余文档：
 
 - [docs/RECIPES.md](docs/RECIPES.md)：动效配方，包括入场、冲击、文字、镜头、计数器、粒子、3D、质感；
-- [docs/NARRATION.md](docs/NARRATION.md)：旁白先行。用 TTS 念出文案，按旁白长度排时间轴，字幕和逐词动效从同一份数据来；
+- [docs/NARRATION.md](docs/NARRATION.md)：旁白先行。用 TTS 念出文案，按旁白长度排时间轴。字幕是不带样式的逐字时间，画面自己决定怎么画；
 - [docs/AUDIO.md](docs/AUDIO.md)：音频交给 visualtone 混音。音轨、母线、人声闪避、响度，以及听不到声音时怎么检查；
 - [docs/REACT.md](docs/REACT.md)：React 写法；
 - [docs/FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)：需要 flexlayer 配合的改动。

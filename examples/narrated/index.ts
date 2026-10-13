@@ -56,7 +56,7 @@ const SEPARATE = (L.check!.words.find((w) => w.text.includes('重叠')) ?? L.che
 const RESOLVED = SEPARATE + 0.6
 
 /** 本段的入场、出场：段首 0.35s 淡入，段尾 0.3s 淡出。 */
-const presence = (t: number, l: PlannedLine) => fade(t, l.from, l.to, 0.35, 0.3)
+const presence = (t: number, l: { from: number; to: number }) => fade(t, l.from, l.to, 0.35, 0.3)
 
 // ---------------------------------------------------------------- 2. 帧函数：t → 画面
 
@@ -108,22 +108,29 @@ function header(f: Frame) {
   )
 }
 
-/** 字幕：念过的字是墨色，正在念的词是强调色，还没念到的是浅灰。 */
+/** 字幕。时间来自 f.subtitle，三种颜色是画面自己定的：念过的墨色，正在念的词强调色，还没到的浅灰。 */
 function caption(f: Frame) {
-  const c = vo.caption(f.t)
-  if (!c) return null
-  const { line, spoken, word } = c
-  const a = presence(f.t, line)
-  const head = word ? word.start : spoken
-  const tailFrom = word ? Math.max(word.end, spoken) : spoken
+  const now = f.subtitle
+  if (!now) return null
+  const a = presence(f.t, now.line)
+  const active = now.line.words.find((w) => f.t >= w.from && f.t < w.to)
+  const spoken = f.t >= now.line.speechTo ? now.line.text.length : now.line.words.reduce((e, w) => (f.t >= w.from ? w.end : e), 0)
+  const said = active ? active.start : spoken
+  const through = active ? active.end : spoken
+  const spans: Array<{ text: string; color: string; id?: string }> = []
+  for (const ch of now.chars) {
+    const color = ch.start < said ? INK : ch.start < through ? ACCENT : DIM
+    const id = color === ACCENT ? 'word' : undefined
+    const last = spans.at(-1)
+    if (last && last.color === color) last.text += ch.text
+    else spans.push({ text: ch.text, color, id })
+  }
   return place(
     { x: W / 2, y: 930, opacity: a },
     h(
       'p',
       { style: 'white-space:nowrap; font-size:50px; font-weight:600; letter-spacing:0.02em' },
-      h('span', { style: `color:${INK}` }, line.text.slice(0, head)),
-      word ? h('span', { id: 'word', style: `color:${ACCENT}` }, line.text.slice(word.start, tailFrom)) : null,
-      h('span', { style: `color:${DIM}` }, line.text.slice(tailFrom)),
+      ...spans.map((s) => h('span', { id: s.id, style: `color:${s.color}` }, s.text)),
     ),
   )
 }
@@ -322,6 +329,7 @@ export default defineComposition({
   background: PAPER,
   color: INK,
   timeline: tl,
+  subtitles: vo.subtitles,
   envelopes: true,
   render: (f) => [ruler(f), header(f), intro(f), frameFn(f), voiceFn(f), soundFn(f), checkFn(f), outro(f), caption(f)],
   audio: () => ({

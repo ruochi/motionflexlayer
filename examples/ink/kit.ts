@@ -219,19 +219,30 @@ export function dots(f: Frame): Child {
   })
 }
 
-/** 字幕：念过的字亮，没念到的暗。 */
+/**
+ * 字幕。时间来自 f.subtitle 的逐字轨，颜色是这一帧自己的决定：
+ * 已经开口的词整词亮，还没到的词暗。逐字淡入可以改成用 ch.progress。
+ */
 export function subtitle(f: Frame): Child {
-  const c = vo.caption(f.t)
-  if (!c) return null
-  const a = fade(f.t, c.line.from, c.line.to, 0.25, 0.25)
-  const said = c.word ? Math.max(c.word.end, c.spoken) : c.spoken
+  const now = f.subtitle
+  if (!now) return null
+  const a = fade(f.t, now.line.from, now.line.to, 0.25, 0.25)
+  let end = 0
+  if (f.t >= now.line.speechTo) end = now.line.text.length
+  else for (const w of now.line.words) if (f.t >= w.from) end = w.end
+  const spans: Array<{ text: string; color: string }> = []
+  for (const ch of now.chars) {
+    const color = ch.start < end ? C.paper : rgba(C.paper, 0.38)
+    const last = spans.at(-1)
+    if (last && last.color === color) last.text += ch.text
+    else spans.push({ text: ch.text, color })
+  }
   return place(
     { x: W / 2, y: 1000, opacity: a, id: 'subtitle' },
     h(
       'p',
       { style: 'white-space:nowrap; font-size:44px; letter-spacing:0.02em' },
-      h('span', { style: `color:${C.paper}` }, c.line.text.slice(0, said)),
-      h('span', { style: `color:${rgba(C.paper, 0.38)}` }, c.line.text.slice(said)),
+      ...spans.map((s) => h('span', { style: `color:${s.color}` }, s.text)),
     ),
   )
 }
