@@ -41,8 +41,7 @@ export function registerFont(path: string, family?: string): void {
   registerFontPath(name, path)
 }
 
-/** 下载并注册默认字体，再按名字准备目录里的字体。下载失败直接抛出。 */
+/** 下载并注册默认字体，再按名字准备目录里的字体。下载失败或名字没登记会抛出。 */
 export function ensureFonts(families?: Iterable<string>): Promise<void> {
-  initFonts(families)
-  return Promise.resolve()
+  return initFonts(families)
 }
