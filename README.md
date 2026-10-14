@@ -31,7 +31,8 @@ export default defineComposition({
 - [docs/NARRATION.md](docs/NARRATION.md)：旁白先行。用 TTS 念出文案，按旁白长度排时间轴，字幕和逐词动效从同一份数据来；
 - [docs/AUDIO.md](docs/AUDIO.md)：音频交给 visualtone 混音。音轨、母线、人声闪避、响度，以及听不到声音时怎么检查；
 - [docs/REACT.md](docs/REACT.md)：React 写法；
-- [docs/FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)：需要 flexlayer 配合的改动。
+- [docs/FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)：需要 flexlayer 配合的改动；
+- [docs/VISUALTONE-SPEC.md](docs/VISUALTONE-SPEC.md)：给 visualtone 的乐谱规范提案，目标是让模型写好配乐和音效。
 
 ## 安装
 
