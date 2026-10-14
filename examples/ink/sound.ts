@@ -31,11 +31,12 @@ function bed(): AudioTrack[] {
   const keys: AudioTrack = {
     id: 'pad',
     instrument: 'epiano',
+    gain: -15,
     brightness: 0.4,
     space: 0.6,
     chords: Object.entries(HARMONY).map(([id, sym]) => ({ in: [id], progression: sym, style: 'pad' as const, register: 'D4' })),
   }
-  const bass: AudioTrack = { id: 'bass', instrument: 'sub', gain: -4, follow: 'pad', patterns: [{ grid: '1bar', notes: '1' }] }
+  const bass: AudioTrack = { id: 'bass', instrument: 'sub', gain: -18, follow: 'pad', patterns: [{ grid: '1bar', notes: '1' }] }
   return [keys, bass]
 }
 
@@ -54,7 +55,7 @@ function plucks(): AudioTrack {
     last = t
     notes.push({ at: t, pitch: PENTA[PENTA.length - 1 - (i % PENTA.length)]!, velocity: lilt(i, 0.45), duration: 0.4 })
   })
-  return { id: 'pluck', instrument: 'pluck', brightness: 0.75, space: 0.4, pan: -0.2, gain: -3, notes }
+  return { id: 'pluck', instrument: 'pluck', brightness: 0.75, space: 0.4, pan: -0.2, gain: -6, notes }
 }
 
 /** 三行字对齐、三个名字出现：木琴，按主和弦往上。 */
@@ -90,8 +91,8 @@ function effects(): AudioTrack {
     { type: 'tick', at: T_POP, size: 0.3 },
     { type: 'riser', at: L.stroke.to, duration: L.stroke.to - T_FLOOD + 0.6, size: 0.3 },
     { type: 'impact', at: L.glass.from, size: 0.3 },
-    { type: 'whoosh', at: T_PILL + 0.1, size: 0.32, direction: 'in', pan: -0.4 },
-    { type: 'shimmer', at: T_LENS, size: 0.4 },
+    { type: 'whoosh', at: T_PILL + 0.1, size: 0.2, direction: 'in', pan: -0.4 },
+    { type: 'shimmer', at: T_LENS, size: 0.25 },
     { type: 'shimmer', at: T_GLASS_TEXT, size: 0.4 },
     { type: 'swell', at: T_EXTRUDE + 0.8, duration: 1.0, size: 0.22 },
     { type: 'hit', at: T_HOP_LAND, size: 0.4, brightness: 0.3 },
@@ -100,7 +101,7 @@ function effects(): AudioTrack {
     { type: 'click', at: T_HERE, size: 0.3 },
     { type: 'boom', at: T_END_SEAL, size: 0.25 },
   ]
-  return { id: 'fx', role: 'sfx', sfx }
+  return { id: 'fx', role: 'sfx', gain: -8, sfx }
 }
 
 export const tracks = (): AudioTrack[] => [...bed(), plucks(), marimba(), effects()]

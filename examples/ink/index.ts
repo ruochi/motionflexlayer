@@ -31,7 +31,8 @@ export default defineComposition({
   timeline: vo.timeline(),
   render: (f) => [...typeScenes(f), ...opticsScenes(f), ...pageScenes(f), ...chapter(f), dots(f), subtitle(f)],
   audio: () => ({
-    clips: vo.clips(),
+    clips: vo.clips({ gain: 3 }),
+    buses: { voice: { comp: { threshold: -24, ratio: 2.5 } } },
     key: 'D major',
     tracks: tracks(),
     master: { lufs: -16, fadeOut: 1.5 },

@@ -70,10 +70,23 @@ export type FollowDuck = {
  */
 export type Duck = 'auto' | 'off' | FollowDuck | TimedDuck
 
+/** 压缩器。旁白的峰均比高，先压一下峰，响度对齐时限幅器就不用压那么深。 */
+export type Compressor = {
+  /** dBFS，按母线增益之后、响度对齐之前的电平算。默认 -20。 */
+  threshold?: number
+  /** 默认 3。 */
+  ratio?: number
+  /** 秒。默认 0.005。 */
+  attack?: number
+  /** 秒。默认 0.12。 */
+  release?: number
+}
+
 export type AudioBus = {
   /** dB。 */
   gain?: number
   duck?: Duck | Duck[]
+  comp?: Compressor
   /** 混响发送 0..1。 */
   space?: number
   /**

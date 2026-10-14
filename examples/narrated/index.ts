@@ -280,11 +280,12 @@ function music(): AudioTrack[] {
   const pad: AudioTrack = {
     id: 'pad',
     instrument: 'epiano',
+    gain: -11,
     brightness: 0.42,
     space: 0.55,
     chords: lines.map((l, i) => ({ in: [l.id], progression: PROGRESSION[i % PROGRESSION.length]!, style: 'pad' as const, register: 'C4' })),
   }
-  const bass: AudioTrack = { id: 'bass', instrument: 'sub', gain: -4, follow: 'pad', patterns: [{ grid: '1bar', notes: '1' }] }
+  const bass: AudioTrack = { id: 'bass', instrument: 'sub', gain: -14, follow: 'pad', patterns: [{ grid: '1bar', notes: '1' }] }
   return [pad, bass]
 }
 
@@ -293,6 +294,7 @@ function effects(): AudioTrack {
   return {
     id: 'fx',
     role: 'sfx',
+    gain: -3,
     sfx: [
       { type: 'shimmer', at: 0.25, size: 0.45 },
       ...lines.slice(1).map((l, i) => ({ type: 'whoosh' as const, at: l.from, size: 0.24, direction: i % 2 ? ('out' as const) : ('in' as const) })),
@@ -316,6 +318,7 @@ export default defineComposition({
   render: (f) => [ruler(f), header(f), intro(f), frameFn(f), voiceFn(f), soundFn(f), checkFn(f), outro(f), caption(f)],
   audio: () => ({
     clips: vo.clips(),
+    buses: { voice: { comp: { threshold: -24, ratio: 2.5 } } },
     key: 'C major',
     tracks: [...music(), effects()],
     master: { lufs: -16, fadeOut: 0.8 },

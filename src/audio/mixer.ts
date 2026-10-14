@@ -5,7 +5,7 @@ import { compile, parseScore, render as renderScore, type ClipBuffer, type Issue
 import type { Timeline } from '../timeline.js'
 import { decodeAudio } from './decode.js'
 import { toEnvelopes, type Envelopes } from './envelopes.js'
-import type { AudioBus, AudioClip, AudioSection, AudioSource, AudioSpec, AudioTrack, Duck, Stereo, TimedDuck } from './types.js'
+import type { AudioBus, AudioClip, AudioSection, AudioSource, AudioSpec, AudioTrack, Compressor, Duck, Stereo, TimedDuck } from './types.js'
 
 export const dbToGain = (db: number) => 10 ** (db / 20)
 export const gainToDb = (g: number) => (g > 0 ? 20 * Math.log10(g) : -Infinity)
@@ -42,8 +42,8 @@ export type MixResult = Stereo & {
 export type CompiledAudio = {
   score: ScoreInput
   clips: Record<string, ClipBuffer>
-  /** 母线名 → 按时间点的闪避，渲染时在 processTrack 里乘上去。 */
-  timedDucks: Record<string, TimedDuck[]>
+  /** 母线名 → 压缩器和按时间点的闪避，渲染时在 processTrack 里做。 */
+  processors: Record<string, { comp?: Compressor; ducks: TimedDuck[] }>
   inputs: MixResult['inputs']
 }
 
@@ -90,7 +90,7 @@ export function sectionsOf(tl: Timeline): AudioSection[] {
 
 /**
  * 把 AudioSpec 编成 visualtone 的乐谱：每条母线一条音轨，片段变成 clips，采样在内存里传；
- * 负的 at 折算成 offset，声像烘进缓冲；跟电平的闪避交给 visualtone，按时间点的闪避留给 processTrack。
+ * 负的 at 折算成 offset，声像烘进缓冲；跟电平的闪避交给 visualtone，压缩和按时间点的闪避留给 processTrack。
  */
 export async function compileAudio(spec: AudioSpec, opts: MixOptions): Promise<CompiledAudio> {
   const sr = spec.sampleRate ?? 48000
@@ -158,7 +158,7 @@ export async function compileAudio(spec: AudioSpec, opts: MixOptions): Promise<C
     })
   }
 
-  const timedDucks: Record<string, TimedDuck[]> = {}
+  const processors: CompiledAudio['processors'] = {}
   for (const [name, bus] of Object.entries(buses)) {
     const ducks: Duck[] = bus.duck == null ? [] : Array.isArray(bus.duck) ? bus.duck : [bus.duck]
     const timed = ducks.filter((d): d is TimedDuck => typeof d === 'object' && 'times' in d)
@@ -168,7 +168,7 @@ export async function compileAudio(spec: AudioSpec, opts: MixOptions): Promise<C
     const t = tracks.get(name)!
     if (typeof d === 'string') t.duck = d
     else if (d) t.duck = { by: d.by, amount: d.depth ?? 0.5, ...(d.release != null ? { release: d.release } : {}) }
-    if (timed.length) timedDucks[name] = timed
+    if (timed.length || bus.comp) processors[name] = { comp: bus.comp, ducks: timed }
   }
 
   const tl = opts.timeline
@@ -187,7 +187,7 @@ export async function compileAudio(spec: AudioSpec, opts: MixOptions): Promise<C
     mix: { loudness: m.lufs ?? -16, ceiling: m.ceiling ?? -1 },
   }
   parseScore(score)
-  return { score, clips, timedDucks, inputs: [...inputs].map(([src, sha256]) => ({ src, sha256 })) }
+  return { score, clips, processors, inputs: [...inputs].map(([src, sha256]) => ({ src, sha256 })) }
 }
 
 /** 按时间点闪避的增益，逐采样。重叠的两次取压得更深的那次。 */
@@ -214,6 +214,24 @@ export function timedDuckGain(ducks: readonly TimedDuck[], length: number, sampl
   return gain
 }
 
+/** 前馈压缩：峰值跟随，按 dB 算增益衰减，不补偿（响度对齐会补回来）。两个声道共用一个增益，声像不漂。 */
+export function compress(audio: readonly Float32Array[], sampleRate: number, c: Compressor): void {
+  const threshold = c.threshold ?? -20
+  const ratio = Math.max(1, c.ratio ?? 3)
+  const atk = Math.exp(-1 / ((c.attack ?? 0.005) * sampleRate))
+  const rel = Math.exp(-1 / ((c.release ?? 0.12) * sampleRate))
+  let env = 0
+  for (let i = 0; i < audio[0]!.length; i++) {
+    let v = 0
+    for (const ch of audio) v = Math.max(v, Math.abs(ch[i]!))
+    env = v > env ? atk * env + (1 - atk) * v : rel * env + (1 - rel) * v
+    const over = gainToDb(env) - threshold
+    if (over <= 0) continue
+    const g = dbToGain(-over * (1 - 1 / ratio))
+    for (const ch of audio) ch[i]! *= g
+  }
+}
+
 const fadeCurve = (k: number) => Math.sin((Math.min(1, Math.max(0, k)) * Math.PI) / 2)
 
 /** 每条音轨的起音时刻：音符、音效的锚点、片段的开头。相隔不到 30 毫秒的（和弦、扫弦）算一次。 */
@@ -233,15 +251,17 @@ function onsetsOf(score: ScoreInput): Record<string, number[]> {
  * 同样的输入永远得到同样的输出。总线淡入淡出在渲染之后做。
  */
 export async function mixAudio(spec: AudioSpec, opts: MixOptions): Promise<MixResult> {
-  const { score, clips, timedDucks, inputs } = await compileAudio(spec, opts)
+  const { score, clips, processors, inputs } = await compileAudio(spec, opts)
   const res = renderScore(parseScore(score), {
     clips,
     baseDir: opts.baseDir,
     envelopes: opts.envelopeFps != null,
     processTrack: (track, audio, sampleRate) => {
-      const ducks = timedDucks[track.id]
-      if (!ducks) return
-      const g = timedDuckGain(ducks, audio[0].length, sampleRate)
+      const p = processors[track.id]
+      if (!p) return
+      if (p.comp) compress(audio, sampleRate, p.comp)
+      if (!p.ducks.length) return
+      const g = timedDuckGain(p.ducks, audio[0].length, sampleRate)
       for (const ch of audio) for (let i = 0; i < ch.length; i++) ch[i]! *= g[i]!
     },
   })

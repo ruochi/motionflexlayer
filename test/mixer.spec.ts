@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { analyzeAudio } from '../src/audio/analyze.js'
 import { AudioFrame } from '../src/audio/envelopes.js'
-import { compileAudio, dbToGain, mixAudio, sfx, timedDuckGain } from '../src/audio/mixer.js'
+import { compileAudio, compress, dbToGain, mixAudio, sfx, timedDuckGain } from '../src/audio/mixer.js'
 import type { AudioSource } from '../src/audio/types.js'
 import { encodeWav } from '../src/audio/wav.js'
 import { timeline } from '../src/timeline.js'
@@ -51,7 +51,7 @@ describe('compileAudio', () => {
   })
 
   it('跟电平的闪避交给 visualtone，按时间点的闪避留给 processTrack', async () => {
-    const { score, timedDucks } = await compileAudio(
+    const { score, processors } = await compileAudio(
       {
         clips: [
           { src: tone(220, 0.2, 4), bus: 'music' },
@@ -62,7 +62,7 @@ describe('compileAudio', () => {
       { duration: 4 },
     )
     expect(score.tracks.find((t) => t.id === 'music')!.duck).toEqual({ by: 'drums', amount: 0.4, release: 0.1 })
-    expect(timedDucks.music).toEqual([{ times: [1, 3], depth: 0.3 }])
+    expect(processors.music!.ducks).toEqual([{ times: [1, 3], depth: 0.3 }])
   })
 
   it('duck.by 指向不存在的母线时报错', async () => {
@@ -85,6 +85,18 @@ describe('compileAudio', () => {
     await expect(compileAudio({ tracks: [{ id: 'k', instrument: 'keys', notes: [{ at: 0, pitch: 'C4' }] }] }, { duration: 1 })).rejects.toThrow(
       /epiano/,
     )
+  })
+})
+
+describe('compress', () => {
+  it('超过门限的部分按比例压，门限以下不动', () => {
+    const loud = new Float32Array(SR).fill(0.5)
+    const quiet = new Float32Array(SR).fill(0.01)
+    compress([loud, loud.slice()], SR, { threshold: -20, ratio: 4 })
+    compress([quiet], SR, { threshold: -20, ratio: 4 })
+    // 0.5 ≈ -6 dBFS，超出 14 dB，压到超出 3.5 dB
+    expect(20 * Math.log10(loud[SR - 1]!)).toBeCloseTo(-16.5, 0)
+    expect(quiet[SR - 1]).toBeCloseTo(0.01, 6)
   })
 })
 
