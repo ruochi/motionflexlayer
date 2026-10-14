@@ -4,6 +4,26 @@
 
 对照的是 visualtone 0.3.0（`16903b3`，轻量引擎，乐谱 v1）。v1 的方向是对的：普通音符列表、音名、乐器预设名、zod 校验、同一份乐谱同一个结果、`instruments` / `processTrack` / `processMaster` 扩展口。下面只写在它之上要改什么。
 
+## 状态
+
+**核对于 visualtone 0.4.0（`fa00ddc`，乐谱 v2）。** 格式部分基本按本文实现：`tempo`、`key`、`sections`、小节拍时间、`patterns` 步进串、`chords` + `follow` 级数、14 种音效和锚点、`at` 收数组、片段的内存缓冲和 `offset` / `duration` / `loop`、增益统一为 dB、乐器目录和默认电平、`duck: "auto"`、严格校验和“是不是想写”、`report.issues`。`compile()` 导出展开后的乐谱，起音时刻可以从里面取。
+
+还没做或和本文不同的：
+
+| # | 优先级 | 问题 | motionflexlayer 受影响的地方 |
+| --- | --- | --- | --- |
+| 1 | P0 | 空音轨仍然报错（`a track needs notes, …`）。程序过滤后得到空数组的音轨会让整首失败 | 示例里按时间点生成的拨弦、音效轨要先判空 |
+| 2 | P0 | 不返回分轨。`processTrack` 拿到的是闪避之前的缓冲，闪避之后的电平拿不到 | `envelopes: true` 的逐轨电平 |
+| 3 | P1 | `mix.loudness` 仍是门限 RMS。实测 `-16` 出来是 -13.7 到 -13.9 LUFS，固定偏响约 2.3 dB（缺 K 加权，声道取平均而不是求和） | 文档承诺的 `lufs`；临时做法是目标减 2.3 |
+| 4 | P1 | 没有按时间点闪避（底鼓抽吸、冲击点让路） | `AudioBus.duck.times`；可以用 `processTrack` 乘增益曲线补 |
+| 5 | P1 | `vocalDip`（2.5 kHz 挖一点）在有人声时整首都开，README 写的是“让路时才挖” | 无 |
+| 6 | P1 | 内存里找不到的片段会去读盘，报 `ENOENT`，看不出是哪条片段、该传到哪里 | 无 |
+| 7 | P2 | 音效类型和 `duck` 写错时是 zod 原始报错，没有“是不是想写”（`ding` → `chime`，`swoosh` → `whoosh`，`duck: false` → `"off"`） | 无 |
+| 8 | P2 | `key` 只认 `"E minor"`，`"Em"`、`"Bb"` 直接报错；可以收下或提示改法 | 无 |
+| 9 | P2 | 鼓的步进串不写 `X` / `g` 时力度全一样，连本文的示例也会报 `flat-velocity`；有音高的循环已经自动做了强弱拍 | 无 |
+| 10 | P2 | 没有 `after-end`（超出 `duration` 的音被静默截掉）、`silent-section`、`loudness-miss` | 无 |
+| 11 | P2 | `npm run example` 在新克隆的仓库里失败：CLI 写 `out/funk.wav` 前没建目录 | 无 |
+
 ## 模型写音乐时会错在哪
 
 规范的每一条都对着下面某个失败：
