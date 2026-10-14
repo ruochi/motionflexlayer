@@ -41,9 +41,9 @@
   },
   "license": "MIT",
   "dependencies": {
-    "flexlayer": "github:ruochi/flexlayer#493c3ccf37020c50dc6cfb42dc6ce9c529af2bed",
+    "flexlayer": "github:ruochi/flexlayer#d9bdeb261d0011ec8855bf1e6e84dcb1f0459ed9",
     "tsx": "^4.19.2",
-    "visualtone": "github:ruochi/visualtone#45751eab2e29fe90a2c2e7a9c7986cc6803ad0e4"
+    "visualtone": "github:ruochi/visualtone#cd635b83439a1fa096db5e1c5a5e6336a6a60f63"
   },
   "peerDependencies": {
     "react": "^19.3.0",
