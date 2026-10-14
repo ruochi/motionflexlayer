@@ -1,7 +1,7 @@
-import { type LayerNode as FvgNode } from 'flexlayer'
+import { checkLayer, type LayerNode as FvgNode } from 'flexlayer'
 import { describe, expect, it } from 'vitest'
 import { defineComposition } from '../src/composition.js'
-import { css, fx, h, place, shot, typewriter, type Shot } from '../src/nodes.js'
+import { css, fx, h, place, shot, splitText, typewriter, type Shot } from '../src/nodes.js'
 import { renderFrame, renderRgba } from '../src/render/frame.js'
 
 const W = 400
@@ -28,6 +28,24 @@ describe('css', () => {
     )
     expect(css('color:red')).toBe('color:red')
     expect(css(undefined)).toBeUndefined()
+  })
+})
+
+describe('splitText', () => {
+  it('每个字一个 span，只写非默认的变换，角度带单位', () => {
+    const node = splitText('ab', (i) => (i ? { y: 12, rotate: 8, scale: 1.2, opacity: 0.5 } : {}), { fontSize: 40 })
+    const spans = node.children as FvgNode[]
+    expect(spans.map((s) => s.attrs.style)).toEqual([undefined, 'translate:0px 12px; rotate:8deg; scale:1.2; opacity:0.5'])
+  })
+
+  it('变换只改绘制：排版盒不动，着墨框跟着字走，没有 non-canonical', async () => {
+    const at = (dy: number) =>
+      h('layer', { width: 600, height: 200 }, h('layer', { x: 50, y: 50 }, splitText('motion', (i) => ({ y: i === 2 ? dy : 0 }), { fontSize: 80 })))
+    const [a, b] = await Promise.all([checkLayer(at(0)), checkLayer(at(40))])
+    const p = (r: typeof a) => r.elements.find((e) => e.tag === 'p')!
+    expect(p(b).box).toEqual(p(a).box)
+    expect(p(b).ink!.bottom - p(a).ink!.bottom).toBeCloseTo(40, 0)
+    expect(b.issues.map((i) => i.code)).not.toContain('non-canonical')
   })
 })
 

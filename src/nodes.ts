@@ -368,6 +368,53 @@ export function typewriter(tokens: string | Token[], shown: number, style?: Styl
   return h('p', { style: s ? `white-space:nowrap; ${s}` : 'white-space:nowrap' }, ...spans)
 }
 
+/** 一个字的变换。只改绘制：行宽、折行、盒子都按没变换算，所以逐字动画不会把整行挤动。 */
+export type CharStyle = {
+  /** 位移，像素。 */
+  x?: number
+  y?: number
+  /** 度，绕这个字自己的中心。 */
+  rotate?: number
+  scale?: number
+  opacity?: number
+  color?: string
+}
+
+const r3 = (v: number) => Math.round(v * 1000) / 1000
+
+function charCss(s: CharStyle): string | undefined {
+  const parts: string[] = []
+  if (s.x || s.y) parts.push(`translate:${r2(s.x ?? 0)}px ${r2(s.y ?? 0)}px`)
+  if (s.rotate) parts.push(`rotate:${r2(s.rotate)}deg`)
+  if (s.scale != null && s.scale !== 1) parts.push(`scale:${r3(s.scale)}`)
+  if (s.opacity != null && s.opacity < 1) parts.push(`opacity:${r3(Math.max(0, s.opacity))}`)
+  if (s.color) parts.push(`color:${s.color}`)
+  return parts.length ? parts.join('; ') : undefined
+}
+
+/**
+ * 逐字动画的 HTML 文字：每个字一个 span，`each(i, n, ch)` 给出这个字的变换。
+ * 和 `drawGlyphs` 不同，字仍由 flexlayer 排版，`glow`、描边、折行、检查都照常。
+ *
+ * ```ts
+ * splitText('motion', (i) => { const k = spring(f.t - 0.05 * i); return { y: (1 - k) * 40, opacity: k } }, { fontSize: 120 })
+ * ```
+ */
+export function splitText(
+  content: string,
+  each: (i: number, n: number, ch: string) => CharStyle | undefined,
+  style?: StyleObject | string,
+  tag: 'p' | 'h1' | 'h2' | 'h3' = 'p',
+): FvgNode {
+  const chars = Array.from(content)
+  const s = css(style)
+  return h(
+    tag,
+    { style: s ? `white-space:nowrap; ${s}` : 'white-space:nowrap' },
+    ...chars.map((ch, i) => h('span', { style: charCss(each(i, chars.length, ch) ?? {}) }, ch)),
+  )
+}
+
 /** 按 token 拼起来的总字符数。 */
 export function tokenLength(tokens: Token[]): number {
   return tokens.reduce((n, tk) => n + (typeof tk === 'string' ? tk.length : tk[0].length), 0)

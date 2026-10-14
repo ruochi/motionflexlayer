@@ -50,6 +50,8 @@ export {
   roll,
   reveal,
   typewriter,
+  splitText,
+  type CharStyle,
   tokenLength,
   type Anchor,
   type Origin,
