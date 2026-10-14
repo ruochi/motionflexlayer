@@ -1,4 +1,4 @@
-import type { Track } from 'visualtone'
+import type { ScoreInput } from 'visualtone'
 
 export type Stereo = { l: Float32Array; r: Float32Array }
 
@@ -18,7 +18,7 @@ export type AudioSource = string | { render: (ctx: SourceContext) => Stereo | Pr
 
 export type AudioClip = {
   src: AudioSource
-  /** 在时间轴上从第几秒开始。默认 0。 */
+  /** 在时间轴上从第几秒开始。默认 0。可以是负数：从音源中间开始播。 */
   at?: number
   /** 从音源的第几秒开始取。默认 0。 */
   offset?: number
@@ -35,38 +35,49 @@ export type AudioClip = {
   fadeOut?: number
   /** 进哪条母线。默认 'main'。旁白放 'voice'，配乐放 'music'。 */
   bus?: string
-  /** 只用于报告。 */
-  label?: string
 }
 
-/**
- * 闪避（ducking）。
- * - times：按时间点闪避，最常见的是给底鼓让路，传 tl.times('kick')。画面脉冲用同一组时间。
- * - by：按另一条母线（或 tracks 里的音轨）的电平闪避，旁白来了压低音乐。
- */
-export type Duck = {
-  times?: readonly number[]
-  by?: string
+/** 按时间点闪避：每个时间点把母线压下去，给底鼓、冲击点让路。画面脉冲用同一组时间。 */
+export type TimedDuck = {
+  times: readonly number[]
   /** 最多压掉多少，0..1。默认 0.5。 */
   depth?: number
-  /** times 模式：起压时间，秒。默认 0.008。 */
+  /** 起压时间，秒。默认 0.008。 */
   attack?: number
-  /** 压住后保持多久，秒。by 模式默认 0.25，避免旁白字间一松一紧。 */
+  /** 压到底后保持多久，秒。默认 0。 */
   hold?: number
   /** 恢复时间，秒。默认 0.18。 */
   release?: number
-  /** by 模式：只压这个频段（Hz），其余频段原样保留。给旁白让路写 [1000, 4000]。 */
-  band?: [number, number]
 }
 
-/** 母线编译成 visualtone 的一条音轨，下面这些字段原样交给它。 */
-type TrackStrip = Pick<Track, 'eq' | 'comp' | 'space' | 'room' | 'echo'>
+/** 跟着另一条母线或音轨的电平闪避。 */
+export type FollowDuck = {
+  by: string
+  /** 最多压掉多少，0..1。默认 0.5。 */
+  depth?: number
+  /** 恢复时间，秒。默认 0.25。 */
+  release?: number
+}
 
-export type AudioBus = TrackStrip & {
+/**
+ * 闪避。
+ * - `'auto'`（music 母线的缺省）：有 voice 母线时，旁白一开口就压低，并在 2.5 kHz 一带让出人声；
+ * - `'off'`：不压；
+ * - `{ by }`：跟着另一条母线或音轨的电平压；
+ * - `{ times }`：按时间点压。可以和上面任意一种写成数组同时用。
+ */
+export type Duck = 'auto' | 'off' | FollowDuck | TimedDuck
+
+export type AudioBus = {
   /** dB。 */
   gain?: number
   duck?: Duck | Duck[]
-  /** 分析时按这个归类。缺省按名字猜：voice/vo → voice，music/bgm → music，sfx/fx → sfx。 */
+  /** 混响发送 0..1。 */
+  space?: number
+  /**
+   * voice 母线触发其它 music 母线和音轨自动闪避；sfx 不闪避。
+   * 缺省按名字猜：voice、vo、narration → voice；music、bgm → music；其余 → sfx。
+   */
   role?: 'voice' | 'music' | 'sfx'
 }
 
@@ -75,29 +86,31 @@ export type MasterOptions = {
   lufs?: number
   /** 限幅器天花板，dBFS。默认 -1。 */
   ceiling?: number
-  /** 总线饱和 0..1。默认 0，旁白要干净。 */
-  drive?: number
   fadeIn?: number
   fadeOut?: number
-  reverb?: NonNullable<VisualtoneMaster>['reverb']
-  room?: NonNullable<VisualtoneMaster>['room']
-  delay?: NonNullable<VisualtoneMaster>['delay']
-  eq?: NonNullable<VisualtoneMaster>['eq']
-  comp?: NonNullable<VisualtoneMaster>['comp']
 }
 
-type VisualtoneMaster = import('visualtone').Score['master']
+/** visualtone 的一条音轨：音符、循环、和弦进行、音效。写法见 visualtone 的 README。 */
+export type AudioTrack = NonNullable<ScoreInput['tracks']>[number]
+
+export type AudioSection = NonNullable<ScoreInput['sections']>[number]
 
 export type AudioSpec = {
   sampleRate?: number
-  /** 只在 tracks 里用了小节记法（at: "4:2"、len: "1/8"）时需要。通常传 tl.bpm。 */
-  bpm?: number
   clips?: AudioClip[]
   buses?: Record<string, AudioBus>
   /**
-   * 直接写 visualtone 的音轨：音符、曲线、内置音效（sfx: whoosh / riser / impact / pop / tick……）。
-   * id 和母线共用一个命名空间，duck.by 可以互相引用。
+   * 直接写 visualtone 的音轨：`notes`、`patterns`（步进串）、`chords`（和弦进行）、`sfx`（内置音效）。
+   * id 和母线共用一个命名空间，`duck.by`、`follow` 可以互相引用。
    */
-  tracks?: Track[]
+  tracks?: AudioTrack[]
+  /** 速度、拍号、swing。缺省用时间轴的 bpm 和每小节拍数。 */
+  tempo?: ScoreInput['tempo']
+  /** 调性，例如 "D major"、"Em"。写了才检查出调。 */
+  key?: string
+  /** 段落。缺省用时间轴的段落；名字不是字母开头的段落换成 s0、s1……，只保留边界。 */
+  sections?: AudioSection[]
+  /** 同一份 seed 同一个结果。 */
+  seed?: number
   master?: MasterOptions
 }

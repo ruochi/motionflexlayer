@@ -1,44 +1,59 @@
+import type { TrackEnvelope } from 'visualtone'
+import type { Stereo } from './types.js'
+
 /** 音轨包络：渲染一次音频得到，画面按 t 查表。可以 JSON 序列化，交给 worker 进程。 */
 export type Envelopes = {
   fps: number
   duration: number
-  /** 每条音轨（母线名或 tracks 里的 id）：起音时刻（秒）和逐帧 RMS 电平（线性）。 */
+  /** 每条音轨（母线名或 tracks 里的 id）：起音时刻（秒）和逐帧电平（线性振幅，闪避之后）。 */
   tracks: Record<string, { onsets: number[]; level: number[] }>
   master: { level: number[] }
 }
 
-type RawEnvelopes = {
-  fps: number
-  tracks: Record<string, { onsets: number[]; level: Float32Array }>
-  master: { level: Float32Array }
-}
-
 const round = (v: number) => Math.round(v * 1e5) / 1e5
 
-export function toEnvelopes(raw: RawEnvelopes, duration: number): Envelopes {
+/** 和 visualtone 给音轨电平用的同一种跟随器（起 5 ms、落 80 ms），总线电平和音轨电平可以直接比。 */
+function follow(s: Stereo, sampleRate: number): Float32Array {
+  const atk = Math.exp(-1 / (0.005 * sampleRate))
+  const rel = Math.exp(-1 / (0.08 * sampleRate))
+  const out = new Float32Array(s.l.length)
+  let e = 0
+  for (let i = 0; i < out.length; i++) {
+    const v = Math.max(Math.abs(s.l[i]!), Math.abs(s.r[i]!))
+    e = v > e ? atk * e + (1 - atk) * v : rel * e + (1 - rel) * v
+    out[i] = e
+  }
+  return out
+}
+
+/** 逐采样电平按帧取平均。gain 是总线淡入淡出，音轨电平也乘上，和听到的一致。 */
+function perFrame(level: Float32Array, sampleRate: number, fps: number, frames: number, gain?: (n: number) => number): number[] {
+  const out = new Array<number>(frames)
+  for (let k = 0; k < frames; k++) {
+    const a = Math.floor((k / fps) * sampleRate)
+    const b = Math.min(level.length, Math.floor(((k + 1) / fps) * sampleRate))
+    let sum = 0
+    for (let n = a; n < b; n++) sum += level[n]! * (gain ? gain(n) : 1)
+    out[k] = round(b > a ? sum / (b - a) : 0)
+  }
+  return out
+}
+
+export function toEnvelopes(
+  mix: Stereo,
+  levels: readonly TrackEnvelope[],
+  onsets: Record<string, number[]>,
+  sampleRate: number,
+  fps: number,
+  duration: number,
+  gain?: (n: number) => number,
+): Envelopes {
+  const frames = Math.ceil(duration * fps)
   const tracks: Envelopes['tracks'] = {}
-  for (const [id, tr] of Object.entries(raw.tracks)) {
-    tracks[id] = { onsets: tr.onsets.map(round).sort((a, b) => a - b), level: Array.from(tr.level, round) }
+  for (const t of levels) {
+    tracks[t.id] = { onsets: (onsets[t.id] ?? []).map(round), level: perFrame(t.level, sampleRate, fps, frames, gain) }
   }
-  // 音效轨在 visualtone 里按事件展开成 fx:whoosh-1、fx:impact-7:low……，这里按前缀合回一条
-  const groups = new Map<string, string[]>()
-  for (const id of Object.keys(raw.tracks)) {
-    const i = id.indexOf(':')
-    if (i <= 0) continue
-    const g = id.slice(0, i)
-    if (!raw.tracks[g]) groups.set(g, [...(groups.get(g) ?? []), id])
-  }
-  for (const [g, ids] of groups) {
-    const n = raw.master.level.length
-    const level = new Array<number>(n).fill(0)
-    for (const id of ids) {
-      const lv = raw.tracks[id]!.level
-      for (let k = 0; k < n; k++) level[k]! += (lv[k] ?? 0) ** 2
-    }
-    const onsets = [...new Set(ids.flatMap((id) => tracks[id]!.onsets))].sort((a, b) => a - b)
-    tracks[g] = { onsets, level: level.map((v) => round(Math.sqrt(v))) }
-  }
-  return { fps: raw.fps, duration, tracks, master: { level: Array.from(raw.master.level, round) } }
+  return { fps, duration, tracks, master: { level: perFrame(follow(mix, sampleRate), sampleRate, fps, frames) } }
 }
 
 /**

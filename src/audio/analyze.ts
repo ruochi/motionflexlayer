@@ -1,6 +1,6 @@
 import { createCanvas, DEFAULT_FONT } from '../canvas.js'
 import type { Timeline } from '../timeline.js'
-import type { AnalysisReport, Finding } from 'visualtone'
+import type { Issue } from 'visualtone'
 import type { Stereo } from './types.js'
 
 export type LevelStat = { peak: number; rms: number }
@@ -11,9 +11,8 @@ export type AudioReport = LevelStat & {
   lufs: number
   /** 限幅器最深压了多少 dB。 */
   limiterDb: number
-  /** visualtone 的混音诊断（响度、频段、旁白与音乐的频段间隔、音效密度）。 */
-  findings: Finding[]
-  voiceover?: AnalysisReport['voiceover']
+  /** visualtone 的报告：出调、音区越界、力度呆板、音效太挤、人声被盖住、限幅太深。 */
+  issues: Issue[]
   sections: Array<LevelStat & { name: string; from: number; to: number }>
   /** 每秒的 RMS，dBFS。 */
   perSecond: number[]
@@ -43,7 +42,7 @@ export function analyzeAudio(
   s: Stereo,
   sr: number,
   tl?: Timeline,
-  mix: { lufs?: number; limiterDb?: number; analysis?: AnalysisReport } = {},
+  mix: { lufs?: number; limiterDb?: number; issues?: Issue[] } = {},
 ): AudioReport {
   const N = s.l.length
   const duration = N / sr
@@ -65,10 +64,9 @@ export function analyzeAudio(
   return {
     ...overall,
     duration,
-    lufs: mix.lufs ?? mix.analysis?.loudness.integratedLufs ?? NaN,
+    lufs: mix.lufs ?? NaN,
     limiterDb: mix.limiterDb ?? 0,
-    findings: mix.analysis?.findings ?? [],
-    voiceover: mix.analysis?.voiceover,
+    issues: mix.issues ?? [],
     sections,
     perSecond,
     cues,
@@ -81,14 +79,7 @@ export function formatAudioReport(r: AudioReport, maxCues = 24): string {
     `音频 ${r.duration.toFixed(2)}s  响度 ${r.lufs.toFixed(1)} LUFS  峰值 ${r.peak.toFixed(1)} dBFS  RMS ${r.rms.toFixed(1)} dBFS  限幅 ${r.limiterDb.toFixed(1)} dB`,
   ]
   if (r.limiterDb > 3) lines.push('  ⚠ 限幅器压了 3 dB 以上：某处太冲，降低那里的片段增益')
-  const vo = r.voiceover
-  if (vo) {
-    const n = (v: number | null, d = 1) => (v == null ? '—' : v.toFixed(d))
-    lines.push(
-      `  旁白：1–4 kHz 高出音乐 ${n(vo.presenceGapDb)} dB  音效 ${n(vo.sfxPer10s)} 个/10s  最短间隔 ${n(vo.sfxMinGapSec, 2)}s`,
-    )
-  }
-  for (const f of r.findings) lines.push(`  ${f.severity === 'high' ? '⚠' : '·'} ${f.message}  → ${f.suggestion}`)
+  for (const i of r.issues) lines.push(`  ${i.code === 'voice-masked' || i.code === 'deep-limiting' ? '⚠' : '·'} ${i.code}  ${i.message}`)
   if (r.sections.length) {
     lines.push('  段落            RMS    峰值')
     for (const s of r.sections) lines.push(`  ${s.name.padEnd(12)} ${f(s.rms)} ${f(s.peak)}   ${s.from.toFixed(2)}–${s.to.toFixed(2)}s`)

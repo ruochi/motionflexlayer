@@ -134,7 +134,7 @@ export function prepare(comp: Composition, opts: { envelopes?: boolean } = {}): 
       const { audioSpecOf, mixAudio } = await import('./audio/mixer.js')
       const spec = await audioSpecOf(comp)
       if (!spec) throw new Error('envelopes: true 需要合成定义 audio')
-      const mix = await mixAudio(spec, { duration: comp.duration, baseDir: comp.baseDir, envelopeFps: comp.fps })
+      const mix = await mixAudio(spec, { duration: comp.duration, baseDir: comp.baseDir, timeline: comp.tl, envelopeFps: comp.fps })
       envelopeMap.set(comp, mix.envelopes!)
     })
     envelopesDone.set(comp, e)

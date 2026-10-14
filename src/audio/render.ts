@@ -1,6 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join, parse } from 'node:path'
-import { analyze, expandSfx, ScoreSchema } from 'visualtone'
 import { prepare, type Composition } from '../composition.js'
 import { analyzeAudio, drawWaveform, type AudioReport } from './analyze.js'
 import type { Envelopes } from './envelopes.js'
@@ -19,7 +18,7 @@ export type RenderAudioResult = {
 
 /**
  * 合成的音轨混成 WAV，同时写一份文字报告、乐谱和波形图，供看不到、听不到声音的一方检查。
- * 有旁白（role 为 voice 的母线）时按 voiceover-bed 档案分析：旁白在 1–4 kHz 要高出音乐，音效不能太密。
+ * 报告里带 visualtone 的检查：出调、音区越界、力度呆板、音效太挤、人声被盖住、限幅太深。
  */
 export async function renderAudio(
   comp: Composition,
@@ -33,7 +32,7 @@ export async function renderAudio(
   const mix = await mixAudio(spec, {
     duration: comp.duration,
     baseDir: comp.baseDir,
-    stems: true,
+    timeline: comp.tl,
     envelopeFps: opts.envelopes ? comp.fps : undefined,
   })
   const sr = mix.sampleRate
@@ -46,16 +45,7 @@ export async function renderAudio(
   await mkdir(dirname(outFile), { recursive: true })
   await writeFile(outFile, encodeWav(cut, sr))
 
-  const hasVoice = mix.score.tracks.some((t) => t.role === 'voice')
-  // 分轨的 id 是展开后的（fx:whoosh-1……），分析要用展开后的乐谱才对得上 role
-  const analysis = analyze({
-    buffers: [mix.l, mix.r],
-    sampleRate: sr,
-    stems: mix.stems,
-    score: expandSfx(ScoreSchema.parse(mix.score)),
-    profile: hasVoice ? 'voiceover-bed' : undefined,
-  }).report
-  const report = analyzeAudio(mix, sr, comp.tl, { lufs: mix.lufs, limiterDb: mix.limiterDb, analysis })
+  const report = analyzeAudio(mix, sr, comp.tl, { lufs: mix.lufs, limiterDb: mix.limiterDb, issues: mix.issues })
 
   const { dir, name } = parse(outFile)
   const scoreFile = join(dir, `${name}.score.json`)
