@@ -36,7 +36,7 @@
 - **先定三件事再写代码：** 色板（3–5 个颜色，写成常量）、字体与字重层级、运动语汇（干脆利落的硬切，还是柔和的弹簧，还是缓慢的推移）。三件事都要能用需求里的一句话解释。
 - **不要照搬示例的配色和版式。** 深底加青橙光效是 showreel 的风格，米色纸面加红色强调是 narrated 的风格。新片子要换掉。
 - **转场方式跟着内容变：** 列举用逐项入场，对比用分屏，因果用连线或推镜，数字用滚动计数。全片只用一种淡入淡出，就会显得单调。
-- **声音也一样：** 和弦进行、音色（`hue`、`engine`）、音效选择都按语气定。轻松的片子用 `pluck` / `marimba` 和 `pop`，严肃的用 `wavetable` 铺底和 `swell`。
+- **声音也一样：** 和弦进行、乐器（`instrument`）、音效选择都按语气定。轻松的片子用 `pluck` / `marimba` 和 `pop`，严肃的用 `pad` / `strings` 铺底和 `swell`。
 
 ## 1. 心智模型
 
@@ -78,7 +78,7 @@
 | 章节、字幕、标注写在取景窗外 | 把字幕放进舞台层，跟着镜头一起放大 | 取景窗外用成片像素；要跟住舞台上的一点用 `cam.toScreen(x, y)` | 字幕跟着推近、震动，读不清 |
 | 推得很近时，模糊和蒙版跟着可见区域走 | 自己按放大倍数再开一张全尺寸离屏 | 直接写 `blur`、`grade`、`mask`。flexlayer 0.2.58 起离屏只光栅化落在画面里的一块 | 整张元素按放大倍数分配，16 倍时多出几百毫秒 |
 | 动画文字不换行 | 让 `p` 自动折行 | `text()` 默认 `white-space:nowrap` | 字距、字号变化时整段重排，画面跳动 |
-| 逐字动画放在 `draw` 里 | 给 `span` 写 `transform` | `drawGlyphs(ctx, str, { each })` | `span` 不支持变换，属性被忽略 |
+| 逐字动画用 `splitText` | 自己拼 `span`，`rotate` 写裸数字；或把整段文字搬进 `draw` | `splitText(str, (i, n) => ({ y, rotate, scale, opacity }), style)`。只在 `draw` 里的场景才用 `drawGlyphs` | 裸数字角度报 `non-canonical`；搬进 `draw` 就没有排版、`glow` 和文字检查 |
 | 在 `canvas.create` 的结果里按 id 找字 | 按原文的序号数 `lines[].chars` | 要找的字包一层 `<span id="here">`，取 `chars.filter((c) => c.id === 'here')` | 折行处的空格不占格，序号会错开；竖排时 `lines` 是一格一项，按 `x` 分列 |
 | `draw` 里不重置变换 | `ctx.setTransform(1, 0, 0, 1, 0, 0)`、`ctx.reset()` | 用 `ctx.save()` / `translate` / `restore()` | 破坏 flexlayer 的定位和 `scale` 倍率，导出半分辨率时位置错乱 |
 | `draw` 里不分配大对象 | 每帧 `createCanvas(1920, 1080)` | 在模块顶层或 `setup` 里建好，复用 | 内存上涨，越来越慢 |
@@ -184,17 +184,17 @@ audio: ({ tl }) => ({
     { src: 'music/bed.wav', loop: true, gain: -8, fadeIn: 1, bus: 'music' },
     ...sfx('sfx/impact.wav', tl.times('impact'), { gain: -3 }),
   ],
-  buses: {
-    music: { duck: { by: 'voice', depth: 0.6, band: [1000, 4000] } },   // 旁白说话时，音乐让出人声频段
-  },
-  tracks: [                                                              // visualtone 原生音轨：音符、内置音效
-    { id: 'fx', role: 'sfx', sfx: [{ sfx: 'whoosh', t: tl.at('how') - 0.2 }] },
+  buses: { voice: { comp: { threshold: -24, ratio: 2.5 } } },          // music 母线在旁白开口时自动让路
+  key: 'C major',
+  tracks: [                                                              // visualtone 原生音轨：和弦、步进、内置音效
+    { id: 'pad', instrument: 'epiano', gain: -11, chords: [{ in: ['intro'], progression: 'Fmaj7', style: 'pad' }] },
+    { id: 'fx', role: 'sfx', sfx: [{ type: 'whoosh', at: tl.at('how'), size: 0.3 }] },   // whoosh 的 at 是最响处
   ],
   master: { lufs: -16, fadeOut: 1.5 },
 })
 ```
 
-文件路径相对于合成入口所在的目录。混音由 visualtone 完成：响度按 LUFS 对齐、限幅器兜底、同样输入同样输出。音源也可以是函数（程序化合成器），见 [docs/AUDIO.md](docs/AUDIO.md)。
+文件路径相对于合成入口所在的目录。混音由 visualtone（乐谱 v2）完成：时间轴的 bpm 和段落自动带进乐谱，`in: ['intro']` 就是旁白的第一句；响度按 LUFS 对齐、限幅器兜底、同样输入同样输出。音源也可以是函数（程序化合成器），见 [docs/AUDIO.md](docs/AUDIO.md)。
 
 ### 第四步：验证，由轻到重
 
@@ -277,6 +277,7 @@ npm run mfl -- render comp.ts                 # 成片
 - `roll({ value, cell, size, axis, align }, items)`：滚动窗口。
 - `reveal({ progress, width, height, direction, feather }, ...children)`：蒙版擦除。
 - `typewriter(tokens, shown, style)`：打字机。
+- `splitText(str, (i, n, ch) => ({ x, y, rotate, scale, opacity, color }), style)`：逐字动画的 HTML 文字。变换只改绘制，行宽、折行和盒子不动。
 - `css(obj)`：样式对象转成样式字符串。
 - 原始 flexlayer 节点用 `h(tag, attrs, ...children)`。
 
@@ -300,9 +301,10 @@ npm run mfl -- render comp.ts                 # 成片
 
 **音频：**
 
-- `AudioSpec { clips, buses, tracks, master, bpm }`：混音描述，编译成 visualtone 乐谱。
-- `sfx(src, times, opts)`：同一个音效放在一组时间点上。
-- `mixAudio(spec, { duration, envelopeFps, stems })`：直接混音。`compileAudio(spec)` 只编译不渲染。
+- `AudioSpec { clips, buses, tracks, tempo, key, sections, seed, master }`：混音描述，编译成 visualtone 乐谱 v2。`tempo`、`sections` 缺省取时间轴。
+- `AudioTrack`：visualtone 的一条音轨（`notes`、`patterns`、`chords`、`sfx`、`clips`）。
+- `sfx(src, times, opts)`：同一个音效文件放在一组时间点上。
+- `mixAudio(spec, { duration, timeline, envelopeFps })`：直接混音，结果带 visualtone 的检查 `issues`。`compileAudio(spec, opts)` 只编译不渲染。
 - `renderAudio(comp, file)`：混成 WAV，同时给出报告和乐谱。
 - `f.audio`（合成写 `envelopes: true`）：`level(track)`、`db(track)`、`onsets(track)`、`since(track)`、`at(t)`。
 - `analyzeAudio`、`formatAudioReport`、`drawWaveform`：电平分析和波形图。

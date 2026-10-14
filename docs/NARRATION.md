@@ -32,8 +32,8 @@ export default defineComposition({
   timeline: vo.timeline(),
   render: (f) => { /* f.section.name 是当前这句的 id */ },
   audio: () => ({
-    clips: vo.clips(),                                   // 进 'voice' 母线
-    buses: { music: { duck: { by: 'voice', depth: 0.6, band: [1000, 4000] } } },
+    clips: vo.clips(),                                   // 进 'voice' 母线；music 母线和音轨自动让路
+    buses: { voice: { comp: { threshold: -24, ratio: 2.5 } } },
   }),
 })
 ```
@@ -91,10 +91,11 @@ export default defineComposition({
 
 ## 声音
 
-- 旁白进 `voice` 母线（`vo.clips()` 的默认值），母线名为 `voice` 时自动标记 `role: 'voice'`，visualtone 按 voiceover-bed 档案分析。
-- 音乐让路：`duck: { by: 'voice', depth: 0.6, band: [1000, 4000] }`。只压 1–4 kHz，低频的温暖保留。visualtone 原生音轨直接写 `duck: { by: 'voice', amount: 0.6, band: [1000, 4000] }`。
-- 旁白可以加压缩让音量更稳：`buses: { voice: { comp: { threshold: -24, ratio: 2.5, attackMs: 8, releaseMs: 120, knee: 6, makeup: 0 } } }`。
-- 检查 `audio` 报告的“旁白：1–4 kHz 高出音乐 N dB”，至少 6 dB；不到就降音乐或加大 duck 的 depth。
+- 旁白进 `voice` 母线（`vo.clips()` 的默认值），母线名为 `voice` 时自动标记 `role: 'voice'`。
+- 音乐让路不用写：每条 `role: 'music'` 的母线和音轨缺省 `duck: 'auto'`，旁白一开口就压低，并在 2.5 kHz 一带让出人声。不想让路的写 `duck: 'off'`。
+- 旁白的段落就是乐谱的段落：和弦写成 `chords: [{ in: ['intro'], progression: 'Fmaj7', style: 'pad' }]`，换和弦正好落在换句上。
+- 旁白可以加压缩让音量更稳：`buses: { voice: { comp: { threshold: -24, ratio: 2.5 } } }`。TTS 偏轻时 `vo.clips({ gain: 3 })`。
+- 铺底的音量要自己摆：visualtone 乐器 `gain: 0` 是乐器之间配平的音量，比 TTS 旁白响。`epiano` / `pad` 从 `gain: -11` 起，`sub` 从 -14 起。写 `envelopes: true`，旁白说话时音乐的 `f.audio.db()` 应比旁白低 10 dB 以上；报告里出现 `voice-masked` 就再降。
 
 ## 合成引擎与缓存
 
