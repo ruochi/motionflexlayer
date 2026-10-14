@@ -35,6 +35,8 @@ export type AudioClip = {
   fadeOut?: number
   /** 进哪条母线。默认 'main'。旁白放 'voice'，配乐放 'music'。 */
   bus?: string
+  /** 只是标注，不参与混音。 */
+  label?: string
 }
 
 /** 按时间点闪避：每个时间点把母线压下去，给底鼓、冲击点让路。画面脉冲用同一组时间。 */

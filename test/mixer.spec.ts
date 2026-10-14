@@ -121,7 +121,7 @@ describe('mixAudio', () => {
   it('按时间点闪避压低母线', async () => {
     const spec = (times: number[]) => ({
       clips: [{ src: tone(220, 0.3, 4), bus: 'music' }, { src: tone(1000, 0.05, 4), bus: 'bed' }],
-      buses: { music: { duck: times.length ? { times, depth: 0.8, release: 0.3 } : 'off' } },
+      buses: { music: { duck: times.length ? { times, depth: 0.8, release: 0.3 } : ('off' as const) } },
     })
     // 响度对齐会把整体抬回来，按不闪避的 bed 归一后再比
     const rel = async (times: number[], a: number, b: number) => {

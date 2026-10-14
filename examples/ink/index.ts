@@ -32,8 +32,8 @@ export default defineComposition({
   render: (f) => [...typeScenes(f), ...opticsScenes(f), ...pageScenes(f), ...chapter(f), dots(f), subtitle(f)],
   audio: () => ({
     clips: vo.clips(),
-    buses: { voice: { comp: { threshold: -24, ratio: 2.5, attackMs: 8, releaseMs: 120, knee: 6, makeup: 0 } } },
+    key: 'D major',
     tracks: tracks(),
-    master: { lufs: -16, fadeOut: 1.5, reverb: { size: 0.7, decay: 0.5, preDelayMs: 30, damping: 0.45, width: 0.9 } },
+    master: { lufs: -16, fadeOut: 1.5 },
   }),
 })

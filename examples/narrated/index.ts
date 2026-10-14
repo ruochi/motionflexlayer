@@ -7,7 +7,6 @@
  * 流程就是 MOTION.md 的标准输入流程：文案 → 旁白 → 时间轴 → 画面 → 声音 → 检查 → 渲染。
  * 旁白缓存在 voice/ 目录，已提交，离线可重现；改了文案会重新合成（需要 pip install edge-tts 和网络）。
  */
-import { chord, type Track } from 'visualtone'
 import {
   box,
   defineComposition,
@@ -21,6 +20,7 @@ import {
   rgba,
   spring,
   text,
+  type AudioTrack,
   type Child,
   type Frame,
   type PlannedLine,
@@ -273,41 +273,31 @@ function outro(f: Frame) {
 
 // ---------------------------------------------------------------- 3. 声音：旁白、按段落换和弦的电钢、音效
 
-const PROGRESSION = [
-  ['Fmaj7', 'F3'],
-  ['C', 'C4'],
-  ['G', 'G3'],
-  ['Am7', 'A3'],
-  ['Fmaj7', 'F3'],
-  ['Csus2', 'C4'],
-] as const
+/** 每段一个和弦，和弦切换落在段落边界上，所以跟着旁白走。 */
+const PROGRESSION = ['Fmaj7', 'C', 'G', 'Am7', 'Fmaj7', 'Csus2']
 
-/** 每段一个和弦，段内每 1.6 秒轻轻再弹一次。和弦切换落在段落边界上，所以跟着旁白走。 */
-function music(): Track[] {
-  const pad: Track = { id: 'pad', role: 'music', engine: 'epiano', hue: 210, lightness: 0.42, space: 0.55, release: 900, notes: [], duck: { by: 'voice', amount: 0.75, band: [1000, 4000], holdMs: 250 } }
-  const bass: Track = { id: 'bass', role: 'music', hue: 24, lightness: 0.3, release: 400, notes: [] }
-  lines.forEach((l, i) => {
-    const [sym, root] = PROGRESSION[i % PROGRESSION.length]!
-    const tones = chord(sym, root)
-    const end = l.to
-    for (let t = l.from, k = 0; t < end - 0.4; t += 1.6, k++) {
-      const len = Math.min(1.8, end - t)
-      tones.forEach((y, j) => pad.notes!.push({ t: t + j * 0.03, y: y + 12, size: k === 0 ? 0.1 : 0.07, duration: len, ease: 'exp' }))
-    }
-    bass.notes!.push({ t: l.from, y: tones[0]! - 12, size: 0.022, duration: Math.max(0.5, end - l.from - 0.05), ease: 'hold' })
-  })
+function music(): AudioTrack[] {
+  const pad: AudioTrack = {
+    id: 'pad',
+    instrument: 'epiano',
+    brightness: 0.42,
+    space: 0.55,
+    chords: lines.map((l, i) => ({ in: [l.id], progression: PROGRESSION[i % PROGRESSION.length]!, style: 'pad' as const, register: 'C4' })),
+  }
+  const bass: AudioTrack = { id: 'bass', instrument: 'sub', gain: -4, follow: 'pad', patterns: [{ grid: '1bar', notes: '1' }] }
   return [pad, bass]
 }
 
-function effects(): Track {
+/** whoosh 的 at 是最响的那一刻：放在新段落开头，正好是画面切换的时候。 */
+function effects(): AudioTrack {
   return {
     id: 'fx',
     role: 'sfx',
     sfx: [
-      { sfx: 'shimmer', t: 0.25, size: 0.35 },
-      ...lines.slice(1).map((l, i) => ({ sfx: 'whoosh' as const, t: Math.max(0, l.from - 0.2), size: 0.3, direction: i % 2 ? -0.6 : 0.6 })),
-      { sfx: 'tick', t: RESOLVED, size: 0.6 },
-      { sfx: 'impact', t: L.outro!.from + 0.15, size: 0.45, low: 0.6 },
+      { type: 'shimmer', at: 0.25, size: 0.45 },
+      ...lines.slice(1).map((l, i) => ({ type: 'whoosh' as const, at: l.from, size: 0.24, direction: i % 2 ? ('out' as const) : ('in' as const) })),
+      { type: 'chime', at: RESOLVED, size: 0.5 },
+      { type: 'boom', at: L.outro!.from + 0.15, size: 0.28 },
     ],
   }
 }
@@ -326,8 +316,8 @@ export default defineComposition({
   render: (f) => [ruler(f), header(f), intro(f), frameFn(f), voiceFn(f), soundFn(f), checkFn(f), outro(f), caption(f)],
   audio: () => ({
     clips: vo.clips(),
-    buses: { voice: { comp: { threshold: -24, ratio: 2.5, attackMs: 8, releaseMs: 120, knee: 6, makeup: 0 } } },
+    key: 'C major',
     tracks: [...music(), effects()],
-    master: { lufs: -16, fadeOut: 0.8, reverb: { size: 0.7, decay: 0.55, preDelayMs: 30, damping: 0.4, width: 0.9 } },
+    master: { lufs: -16, fadeOut: 0.8 },
   }),
 })
