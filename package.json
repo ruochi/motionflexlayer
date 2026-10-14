@@ -29,7 +29,8 @@
   "files": [
     "dist",
     "MOTION.md",
-    "docs"
+    "docs",
+    "skills"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

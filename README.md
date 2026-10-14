@@ -25,6 +25,8 @@ export default defineComposition({
 
 让模型做动画时，先让它读 **[MOTION.md](MOTION.md)**。里面写了标准输入流程、心智模型、硬规则、四步工作流（时间轴 → 帧函数 → 音频 → 验证）、API 速查、动效基本功，以及怎样避免每支片子都一个样。
 
+做 15 秒品牌片、产品短片时，改读 **[skills/brand-film/SKILL.md](skills/brand-film/SKILL.md)**。先写分镜和文案出处，再用计划和画面两道闸门卡住半成品，配乐最后写。参考片在 [examples/brand](examples/brand/index.ts)。
+
 其余文档：
 
 - [docs/RECIPES.md](docs/RECIPES.md)：动效配方，包括入场、冲击、文字、镜头、计数器、粒子、3D、质感；
@@ -69,6 +71,8 @@ npm run mfl -- audio  examples/hello/index.ts            # WAV、波形图、电
 npm run mfl -- render examples/hello/index.ts            # 多进程渲染 mp4，带音轨
 npm run mfl -- render examples/hello/index.ts --scale 0.5 --fps 30 --from 2 --to 6   # 草稿
 npm run mfl -- cues   examples/hello/index.ts            # 导出时间轴 JSON
+npm run mfl -- brand  examples/brand/index.ts            # 品牌片：分镜、文案、素材、时间轴
+npm run mfl -- frames examples/brand/index.ts            # 品牌片：覆盖率、细节、运动
 npm run voice -- examples/narrated/index.ts              # 合成或读取旁白，按段列出时间和语速
 ```
 
@@ -85,6 +89,7 @@ npm run voice -- examples/narrated/index.ts              # 合成或读取旁白
 | [examples/ink](examples/ink/index.ts) | 72 秒、九个镜头的旁白片「着墨」：书法字一笔笔写出后落进段落里自己的格子，拖动栏宽逐帧重排再改竖排，三个字合成一圈墨迹描边，玻璃折射，挤出的立体字，镜头推向排版算出的一点，按着墨对齐。每个镜头都是网页或手写 canvas 要多费不少力气的事 |
 | [examples/orbit](examples/orbit/index.ts) | 8 秒，三维镜头 `shot3d()`：`camera` 绕着卡片、地板和球转，带景深，`draw` 里的点环和镜头外的标注跟着同一台相机 |
 | [examples/synth](examples/synth/index.ts) | 程序化合成器套件，showreel 的配乐用的就是它 |
+| [examples/brand](examples/brand/index.ts) | 15 秒品牌片「校线」：五段、产品界面、红线在正拍上卡上。配分镜、文案出处和素材清单，用来对照 [品牌片流程](skills/brand-film/SKILL.md) |
 
 ## 目录
 
