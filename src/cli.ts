@@ -3,7 +3,7 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import { parseHex } from './color.js'
 import { auditFrames, formatFrames, type RgbaSample } from './brand/frames.js'
-import { auditPlan, auditStructure, formatPlan } from './brand/plan.js'
+import { auditPlan, formatPlan } from './brand/plan.js'
 import { loadComposition, totalFrames, type Composition } from './composition.js'
 import { formatAudioReport } from './audio/analyze.js'
 import { renderAudio } from './audio/render.js'
@@ -30,7 +30,7 @@ const HELP = `motionflexlayer <命令> <合成入口> [选项]
   audio <entry>              只混音：WAV + 波形图 + 电平报告
   cues <entry>               导出时间轴（节拍、段落、cue）JSON，给剪辑软件或作曲用
   voice <entry>              合成或读取旁白缓存，按段列出起止时间、字数和语速
-  brand <entry>              品牌片计划闸门：分镜、文案出处、素材清单、时间轴
+  brand <entry>              品牌片计划闸门：入口旁边的分镜、文案出处、素材清单
   frames <entry>             品牌片画面闸门：覆盖率、细节、运动、静止
       --every <秒>            取样间隔，默认 0.2
       --scale <倍率>          默认 0.2
@@ -164,14 +164,11 @@ async function main() {
         return undefined
       }
     }
-    const issues = [
-      ...auditPlan({
-        shotList: await read('shot-list.md'),
-        copy: await read('copy.md'),
-        assets: await read('assets.md'),
-      }),
-      ...auditStructure(comp),
-    ]
+    const issues = auditPlan({
+      shotList: await read('shot-list.md'),
+      copy: await read('copy.md'),
+      assets: await read('assets.md'),
+    })
     console.log(formatPlan(issues))
     process.exitCode = issues.length > 0 ? 1 : 0
     return
