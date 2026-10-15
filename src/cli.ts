@@ -1,10 +1,13 @@
 #!/usr/bin/env node
-import { mkdir, writeFile } from 'node:fs/promises'
-import { basename, extname, join, resolve } from 'node:path'
-import { loadComposition, type Composition } from './composition.js'
+import { readFile, mkdir, writeFile } from 'node:fs/promises'
+import { basename, dirname, extname, join, resolve } from 'node:path'
+import { parseHex } from './color.js'
+import { auditFrames, formatFrames, type RgbaSample } from './brand/frames.js'
+import { auditPlan, formatPlan } from './brand/plan.js'
+import { loadComposition, totalFrames, type Composition } from './composition.js'
 import { formatAudioReport } from './audio/analyze.js'
 import { renderAudio } from './audio/render.js'
-import { renderFrame } from './render/frame.js'
+import { renderFrame, renderRgba } from './render/frame.js'
 import { IssueLog } from './render/issues.js'
 import { renderStills } from './render/stills.js'
 import { renderVideo } from './render/video.js'
@@ -27,6 +30,10 @@ const HELP = `motionflexlayer <命令> <合成入口> [选项]
   audio <entry>              只混音：WAV + 波形图 + 电平报告
   cues <entry>               导出时间轴（节拍、段落、cue）JSON，给剪辑软件或作曲用
   voice <entry>              合成或读取旁白缓存，按段列出起止时间、字数和语速
+  brand <entry>              品牌片计划闸门：入口旁边的分镜、文案出处、素材清单
+  frames <entry>             品牌片画面闸门：覆盖率、细节、运动、静止
+      --every <秒>            取样间隔，默认 0.2
+      --scale <倍率>          默认 0.2
 
 通用
   --export <名字>             合成的导出名，默认 default
@@ -145,6 +152,48 @@ async function main() {
     await mkdir(resolve(out, '..'), { recursive: true })
     await writeFile(out, JSON.stringify({ fps: comp.fps, ...comp.tl.toJSON() }, null, 2))
     console.log(out)
+    return
+  }
+
+  if (cmd === 'brand') {
+    const dir = dirname(resolve(entry))
+    const read = async (name: string) => {
+      try {
+        return await readFile(join(dir, name), 'utf8')
+      } catch {
+        return undefined
+      }
+    }
+    const issues = auditPlan({
+      shotList: await read('shot-list.md'),
+      copy: await read('copy.md'),
+      assets: await read('assets.md'),
+    })
+    console.log(formatPlan(issues))
+    process.exitCode = issues.length > 0 ? 1 : 0
+    return
+  }
+
+  if (cmd === 'frames') {
+    const every = num(flags.every, 0.2)
+    const scale = num(flags.scale, 0.2)
+    const step = Math.max(1, Math.round(every * comp.fps))
+    const ground = parseHex(comp.background ?? '#000000')
+    const frames: RgbaSample[] = []
+    const total = totalFrames(comp)
+    const started = performance.now()
+    for (let frame = 0; frame < total; frame += step) {
+      const pic = await renderRgba(comp, frame, { scale })
+      frames.push({ t: frame / comp.fps, width: pic.width, height: pic.height, rgba: pic.rgba })
+      if (frames.length % 8 === 0) console.log(`采样 ${frames.length} 帧  ${((performance.now() - started) / 1000).toFixed(1)}s`)
+    }
+    const stats = auditFrames(
+      frames,
+      comp.tl.sections.map((s) => ({ name: s.name, from: s.from, to: s.to })),
+      [ground[0], ground[1], ground[2]],
+    )
+    console.log(formatFrames(stats))
+    process.exitCode = stats.failed.length > 0 ? 1 : 0
     return
   }
 

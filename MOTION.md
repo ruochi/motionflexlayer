@@ -7,6 +7,7 @@
 - **动效手法：** [docs/RECIPES.md](docs/RECIPES.md)。
 - **音频：** [docs/AUDIO.md](docs/AUDIO.md)。声音由 [visualtone](https://github.com/ruochi/visualtone) 渲染。
 - **React 写法：** [docs/REACT.md](docs/REACT.md)。
+- **品牌片：** [skills/brand-film/SKILL.md](skills/brand-film/SKILL.md)。15 秒左右的宣传片、产品短片走那一套：先分镜和文案出处，再写画面，计划和画面两道闸门过了才写配乐。不要从 hello 的深色光效改一改当成品牌片。
 
 ## 0. 标准输入流程
 
