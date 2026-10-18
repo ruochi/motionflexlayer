@@ -28,6 +28,7 @@ export type FrameFloors = {
 /**
  * 下限对着这个渲染器的采样（缩小后的 RGBA、下面的阈值），
  * 卡在参考片下面、空画面上面。空底是 0；参考片见 examples/brand。
+ * 这些数只挡住空画面。不要为了靠近参考片的覆盖率去加卡片和长条。
  */
 export const FRAME_FLOORS: FrameFloors = {
   coverage: 0.06,
