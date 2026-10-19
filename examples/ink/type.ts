@@ -8,7 +8,7 @@
  *
  * 每个字的位置都只由 t 算出：先求它在各个版面里的格子，再按时间在这些格子之间插值。
  */
-import { canvas, glyph, h, type Glyph, type PlacedLine } from 'flexlayer'
+import { glyph, h, layer, type Glyph, type PlacedLine } from 'flexlayer'
 import { clamp, fade, fx, hash, lerp, mixColor, place, progress, pulse, rgba, spring, text, tween, wiggle, type Child, type Frame } from 'motionflexlayer'
 import { at, C, glyphAt, glyphInk, H, L, LATIN, offCanvas, pathLength, roomTo, seal, sheet, W } from './kit.js'
 
@@ -28,7 +28,7 @@ type Layout = { slots: Slot[]; width: number; height: number; lines: PlacedLine[
 
 /** 交给 flexlayer 排一遍，取回每个字的格子（字身中心，相对版面左上角）。 */
 function typeset(style: string, vertical = false): Layout {
-  const made = canvas.create(h('layer', {}, h('p', { style: `font-family:Kai; font-weight:700; font-size:${SIZE}px; ${style}` }, P)))
+  const made = layer.create(h('layer', {}, h('p', { style: `font-family:Kai; font-weight:700; font-size:${SIZE}px; ${style}` }, P)))
   const lines = made.text[0]!.lines
   const slots: Slot[] = []
   // 竖排时 lines 是一格一项，同一列的 x 相同；按 x 数出第几列

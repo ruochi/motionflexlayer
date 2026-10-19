@@ -80,7 +80,9 @@
 | 推得很近时，模糊和蒙版跟着可见区域走 | 自己按放大倍数再开一张全尺寸离屏 | 直接写 `blur`、`grade`、`mask`。flexlayer 0.2.58 起离屏只光栅化落在画面里的一块 | 整张元素按放大倍数分配，16 倍时多出几百毫秒 |
 | 动画文字不换行 | 让 `p` 自动折行 | `text()` 默认 `white-space:nowrap` | 字距、字号变化时整段重排，画面跳动 |
 | 逐字动画用 `splitText` | 自己拼 `span`，`rotate` 写裸数字；或把整段文字搬进 `draw` | `splitText(str, (i, n) => ({ y, rotate, scale, opacity }), style)`。只在 `draw` 里的场景才用 `drawGlyphs` | 裸数字角度报 `non-canonical`；搬进 `draw` 就没有排版、`glow` 和文字检查 |
-| 在 `canvas.create` 的结果里按 id 找字 | 按原文的序号数 `lines[].chars` | 要找的字包一层 `<span id="here">`，取 `chars.filter((c) => c.id === 'here')` | 折行处的空格不占格，序号会错开；竖排时 `lines` 是一格一项，按 `x` 分列 |
+| 量尺寸用 `layer.create` | `import { canvas } from 'flexlayer'`、`canvas.create(node)` | `import { layer } from 'flexlayer'`，`layer.create(node)` | 0.11.0 起 `canvas` 对象已删除 |
+| 在 `layer.create` 的结果里按 id 找字 | 按原文的序号数 `lines[].chars` | 要找的字包一层 `<span id="here">`，取 `chars.filter((c) => c.id === 'here')` | 折行处的空格不占格，序号会错开；竖排时 `lines` 是一格一项，按 `x` 分列 |
+| 报告里的盒子用 `x`、`y` | `element.box.left`、`ink.top`、`centerX` | `box.x`、`box.y`，右边是 `x + width`，中心是 `x + width / 2` | 0.7.0 起报告里的 `box`、`ink`、`effect` 只有 `x`、`y`、`width`、`height`。`layer.create` 返回的布局盒仍带 `left`、`top`、`right`、`bottom` |
 | `draw` 里不重置变换 | `ctx.setTransform(1, 0, 0, 1, 0, 0)`、`ctx.reset()` | 用 `ctx.save()` / `translate` / `restore()` | 破坏 flexlayer 的定位和 `scale` 倍率，导出半分辨率时位置错乱 |
 | `draw` 里不分配大对象 | 每帧 `createCanvas(1920, 1080)` | 在模块顶层或 `setup` 里建好，复用 | 内存上涨，越来越慢 |
 | 看不见的元素就不输出 | 透明度为 0 的层仍然放进文档 | `place()` 在透明度约为 0 时返回 `null`；条件渲染写 `cond && node` | 白白排版、绘制 |

@@ -199,7 +199,7 @@ const cam = shot({ width: W, height: H, x: 1160, y: 575, zoom: z })
 
 如果要让目标点在缩放的同时从原位滑到画面中心，令 `x = 目标 + (中心 - 屏幕位置) / zoom`。showreel 的 `layoutScene` 就是这样写的。
 
-**推向排版算出的一点。** 目标点不必手填：先用 `canvas.create` 量一遍整页，把要看的字包一层 `<span id="here">`，`text[].lines[].chars` 里带这个 `id` 的字就是它，格子中心就是 `shot` 的 `x`、`y`。改了正文、换了栏宽，镜头还是对准那几个字。要在窗外画框标出它，用 `cam.toScreen(x, y)` 换成成片像素，盒子的宽高乘 `cam.zoom`。见 `examples/ink/page.ts`。
+**推向排版算出的一点。** 目标点不必手填：先用 `layer.create` 量一遍整页，把要看的字包一层 `<span id="here">`，`text[].lines[].chars` 里带这个 `id` 的字就是它，格子中心就是 `shot` 的 `x`、`y`。改了正文、换了栏宽，镜头还是对准那几个字。要在窗外画框标出它，用 `cam.toScreen(x, y)` 换成成片像素，盒子的宽高乘 `cam.zoom`。见 `examples/ink/page.ts`。
 
 **按对数插值缩放。** 从 15 倍拉到 1 倍再推到 5 倍，`zoom` 直接线性插值时，放大的那一头会一闪而过。对 `log(zoom)` 插值，画面里的运动速度才是匀的：
 
@@ -232,7 +232,7 @@ return [
 **画中画：一个舞台，几个窗口。** 舞台排一次，放进几个取景窗，各取一块。小窗的位置、大小可以做动画，长到全屏就是转场：
 
 ```ts
-const stage = canvas.create(h('layer', { width: W, height: H }, …scene))   // 量一次，结果可以放进多个窗口
+const stage = layer.create(h('layer', { width: W, height: H }, …scene))   // layer 从 flexlayer 导入。量一次，放进多个窗口
 const wide = shot({ width: W, height: H })
 const close = shot({ width: 640, height: 360, x: 1400, y: 300, zoom: 3 })
 return [

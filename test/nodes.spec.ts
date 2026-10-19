@@ -44,7 +44,7 @@ describe('splitText', () => {
     const [a, b] = await Promise.all([checkLayer(at(0)), checkLayer(at(40))])
     const p = (r: typeof a) => r.elements.find((e) => e.tag === 'p')!
     expect(p(b).box).toEqual(p(a).box)
-    expect(p(b).ink!.bottom - p(a).ink!.bottom).toBeCloseTo(40, 0)
+    expect(p(b).ink.y + p(b).ink.height - (p(a).ink.y + p(a).ink.height)).toBeCloseTo(40, 0)
     expect(b.issues.map((i) => i.code)).not.toContain('non-canonical')
   })
 })

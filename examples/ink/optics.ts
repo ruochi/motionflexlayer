@@ -6,7 +6,7 @@
  *   立体  同一个“墨”字从平面挤出厚度，转过来露出侧面；金色小球从字后面滚过，
  *         字跳起来时影子和字分开。最后字转回正面、缩回平面，停在画面正中，交给下一段的镜头。
  */
-import { canvas, glyph, h } from 'flexlayer'
+import { glyph, h, layer } from 'flexlayer'
 import { fade, keyframes, lerp, place, progress, spring, text, type Child, type Frame } from 'motionflexlayer'
 import { at, C, H, L, LATIN, poseBounds, sheet, W } from './kit.js'
 
@@ -19,7 +19,7 @@ export const T_GLASS_TEXT = at('glass', '文字')
 
 const ROW_FONT = 'font-weight:800; font-size:180px; letter-spacing:0.02em'
 const ROW_TEXT = '排版 · 字形 · 着墨 · 折射 · '
-const ROW_W = canvas.create(h('layer', {}, h('p', { style: `white-space:nowrap; ${ROW_FONT}` }, ROW_TEXT))).width
+const ROW_W = layer.create(h('layer', {}, h('p', { style: `white-space:nowrap; ${ROW_FONT}` }, ROW_TEXT))).width
 const ROWS = [
   { y: 130, color: C.night, speed: -95 },
   { y: 360, color: C.paper, speed: 120 },
@@ -72,7 +72,7 @@ function lens(t: number): Child {
 const GLASS_TEXT = h('p', { style: 'white-space:nowrap; font-size:470px; font-weight:800; color:#ffffff10; glass:clear; shadow:0 24 48 #00000055' }, '着墨')
 /** 玻璃字的着墨，相对字的中心。阴影在报告的 effect 框里四周各外扩约 50px。 */
 const GLASS_INK = (() => {
-  const made = canvas.create(h('layer', {}, GLASS_TEXT))
+  const made = layer.create(h('layer', {}, GLASS_TEXT))
   const ink = made.elements[0]!.ink
   return { left: ink.left - made.width / 2, top: ink.top - made.height / 2, right: ink.right - made.width / 2, bottom: ink.bottom - made.height / 2 }
 })()

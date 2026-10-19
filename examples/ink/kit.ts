@@ -152,12 +152,12 @@ type Chapter = { api: string; note: string }
 
 /** 每段左上角：这一段用到的 flexlayer 能力，以及换成网页或手写 canvas 卡在哪。 */
 const CHAPTERS: Partial<Record<Id, Chapter>> = {
-  glyphs: { api: 'glyph() · canvas.create()', note: '网页要拆成 span 再量 DOM；手写 canvas 没有排版' },
-  reflow: { api: 'canvas.create() · writing-mode', note: '逐字过渡要先排好两套版面，再一个字一个字对上' },
+  glyphs: { api: 'glyph() · layer.create()', note: '网页要拆成 span 再量 DOM；手写 canvas 没有排版' },
+  reflow: { api: 'layer.create() · writing-mode', note: '逐字过渡要先排好两套版面，再一个字一个字对上' },
   stroke: { api: 'stroke', note: 'CSS 描边压在笔画中线上，几个字也合不成一圈' },
   glass: { api: 'glass', note: 'backdrop-filter 只会模糊，折射要自己写着色器' },
   solid: { api: 'path depth · camera', note: '网页要 three.js，还要把中文字体转成几何体' },
-  camera: { api: 'view · canvas.create()', note: '网页要先渲染一遍，量出目标的位置再推镜' },
+  camera: { api: 'view · layer.create()', note: '网页要先渲染一遍，量出目标的位置再推镜' },
   report: { api: 'checkLayer() · anchor-box="ink"', note: '浏览器只给盒子；字形的边界要逐字去量' },
 }
 

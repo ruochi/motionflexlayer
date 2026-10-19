@@ -4,7 +4,9 @@
 
 motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做法。改完一项，motionflexlayer 删一段绕路代码。
 
-**状态核对于 flexlayer 0.6.21（d9bdeb2）。** 第 1、2、3、4、5、6、7、8、13、15、16、18、19、20、21 项已完成，motionflexlayer 已删掉对应的绕路代码；第 17 项部分完成。0.6.13 起入口导出 `createCanvas`、`loadImage`、`initFonts`、`registerFontPath`、`DEFAULT_FONT_FAMILY`（第 2 项），行内 `translate` / `rotate` / `scale` / `opacity` 只改绘制（第 7 项）。0.6.19 起 `style` 里的 `rotate` 要带角度单位，裸数字报 `non-canonical`；属性写法（`rotate="30"`）不变。第 4 项没有按下面的 `bleed` / `profile` 方案做，而是换成了更好的 `view` 取景：取景窗裁掉的不报 `overflow-canvas`，最小字号按屏幕上的大小和短边算。`ink-stroke` 在 0.2.46 并入 `stroke`，示例已改。0.3.0 起 `renderFvg` / `checkFvg` / `FvgNode` 改名为 `renderLayer` / `checkLayer` / `LayerNode`。0.4.0 删掉了 `perspective`，镜头只写 `camera`；没写 `camera` 时，带网格、`ground` 或 `rotateX` / `rotateY` / `z` 的最外层用自己的高度当视距。0.5.0 删掉 `<draw>` 和 `draw` 回调，自定义像素改成 `<canvas>` 和 `<script>`。0.6.0 起 HTML 默认值和浏览器一致（`align-items` / `align-content` 为 `stretch`，`flex-shrink` 为 1，`text-wrap` 为 `wrap`，初始字号 16px，宽高是内容盒）。`box`、`cylinder`、`extrude` 仍能画，但报 `non-canonical`；正的 `depth` 写在 `rect`、`circle`、`path` 上。
+**状态核对于 flexlayer 0.11.0（96388ec）。** 0.11.0 起量尺寸的入口是 `layer.create`、`layer.font`、`layer.component`，`canvas` 对象已删除。0.7.0 起报告里的 `box`、`ink`、`effect` 只写 `x`、`y`、`width`、`height`。0.7.1 起属性上的 `rotate`、`rotateX`、`rotateY` 和 `style` 一样接受带单位的角度，裸数字 `rotate="30"` 仍是度，不报 `non-canonical`。
+
+第 1、2、3、4、5、6、7、8、13、15、16、18、19、20、21 项已完成，motionflexlayer 已删掉对应的绕路代码；第 17 项部分完成。0.6.13 起入口导出 `createCanvas`、`loadImage`、`initFonts`、`registerFontPath`、`DEFAULT_FONT_FAMILY`（第 2 项），行内 `translate` / `rotate` / `scale` / `opacity` 只改绘制（第 7 项）。0.6.19 起 `style` 里的 `rotate` 要带角度单位，裸数字报 `non-canonical`；属性写法（`rotate="30"`）不变。第 4 项没有按下面的 `bleed` / `profile` 方案做，而是换成了更好的 `view` 取景：取景窗裁掉的不报 `overflow-canvas`，最小字号按屏幕上的大小和短边算。`ink-stroke` 在 0.2.46 并入 `stroke`，示例已改。0.3.0 起 `renderFvg` / `checkFvg` / `FvgNode` 改名为 `renderLayer` / `checkLayer` / `LayerNode`。0.4.0 删掉了 `perspective`，镜头只写 `camera`；没写 `camera` 时，带网格、`ground` 或 `rotateX` / `rotateY` / `z` 的最外层用自己的高度当视距。0.5.0 删掉 `<draw>` 和 `draw` 回调，自定义像素改成 `<canvas>` 和 `<script>`。0.6.0 起 HTML 默认值和浏览器一致（`align-items` / `align-content` 为 `stretch`，`flex-shrink` 为 1，`text-wrap` 为 `wrap`，初始字号 16px，宽高是内容盒）。`box`、`cylinder`、`extrude` 仍能画，但报 `non-canonical`；正的 `depth` 写在 `rect`、`circle`、`path` 上。
 
 | # | 优先级 | 改动 | 状态 | motionflexlayer 里受影响的代码 |
 | --- | --- | --- | --- | --- |
@@ -24,7 +26,7 @@ motionflexlayer 现在**不依赖任何一项**就能跑：每项都有临时做
 | 14 | P2 | `renderFrames` 的 `t` 由调用方给 | 新增 | 无 |
 | 15 | P0 | 中文折行：句读落到行首 | ✅ 已完成 | `headsOk` 已删除 |
 | 16 | P1 | 合并子树墨迹时进 `g` | ✅ 已完成 | 无（`glyphAt` 每字一层 layer 只为绕字身中心转） |
-| 17 | P2 | `canvas.create` 的字带上原文位置；竖排按列给 | 部分：字带上所在 span 的 `id` | `examples/ink/page.ts` 的 `cells()` 已改成按 id 取；`type.ts` 竖排仍按 `x` 分列 |
+| 17 | P2 | `layer.create` 的字带上原文位置；竖排按列给 | 部分：字带上所在 span 的 `id` | `examples/ink/page.ts` 的 `cells()` 已改成按 id 取；`type.ts` 竖排仍按 `x` 分列 |
 | 18 | P2 | 被取景窗裁开的文字和 `outside-safe` | ✅ 已完成（0.2.58） | 取景窗或 `overflow="hidden"` 裁开的字不再报；仍露在安全区外的字还要报 |
 | 19 | P2 | 三维平面：`behind-camera` 按投影 `w <= 0` 判、显式 `preserve-3d`、只给图层 `blur` 补超采样倍数、斜平面上的 `text-overlap` 按 `quad` 判 | ✅ 已完成（0.2.50） | `origin` 分摊、`PLANE_BLUR_FIX`、orbit 卡片上的 `expect` 已删除 |
 | 20 | P1 | 新增 `camera` 属性：镜头（焦距 / `fov` / `lens` / `parallel`）、`at`、`orbit`、`roll`、`distance`、`from`、`vanish` | ✅ 已完成（0.2.50）。0.4.0 起删掉 `perspective` 简写 | `shot3d()` 把 `camera` 写在取景层上，物体保持世界姿态。`shot3d({ perspective })` 仍是这边的视距选项，写进 `camera.focal` |
@@ -222,9 +224,9 @@ flexlayer 改用 `linebreak` 断行，并避开行首标点。ink 示例那段�
 
 `layer` 的 `stroke`、`shadow` 合并子树墨迹时会走进 `g`（0.2.46 起 `ink-stroke` 并入 `stroke`）。`glyphAt` 仍然每个字一层 `layer`，因为这样旋转、缩放可以直接绕字身中心，不再是为了绕开这个缺陷。
 
-## 17. `canvas.create` 的字带上原文位置；竖排按列给（P2，部分完成）
+## 17. `layer.create` 的字带上原文位置；竖排按列给（P2，部分完成）
 
-**已完成。** 最内层写了 `id` 的行内标签拥有的字，`chars[]` 上带这个 `id`；`canvas.create` 还返回 `elements`，每个元素有布局盒和变换后的外接框。ink 示例把要看的字写成 `<span id="here">这里</span>`，`cells('here')` 直接按 id 取，不再把 `chars[].text` 拼起来 `indexOf`。
+**已完成。** 最内层写了 `id` 的行内标签拥有的字，`chars[]` 上带这个 `id`；`layer.create` 还返回 `elements`，每个元素有布局盒和变换后的外接框。0.11.0 起这个入口叫 `layer`，不再叫 `canvas`。ink 示例把要看的字写成 `<span id="here">这里</span>`，`cells('here')` 直接按 id 取，不再把 `chars[].text` 拼起来 `indexOf`。
 
 **还没有。**
 

@@ -113,5 +113,5 @@ src/
 - 核心写法和 React 写法可用；Vue 计划放在 v2，设计见 [REACT.md](docs/REACT.md#vuev2-计划)。
 - 视频帧走 flexlayer 的 `renderFrames` 原始 RGBA 输出，0.1 的 PNG 跳过垫片已删除。
 - 混音交给 visualtone（乐谱 v2）：和弦进行、步进鼓、按锚点放的音效、响度归一、限幅、人声自动让路和乐谱检查都来自它；时间轴的 bpm 和段落自动带进乐谱。设了 `envelopes: true` 的合成，帧函数可以通过 `f.audio` 读到各音轨的电平和起音。
-- 依赖 flexlayer 0.6.21：镜头用 `view` 取景，`shot()` 算参数，结构由调用方写两层 layer；三维镜头用取景层上的 `camera`，`shot3d()` 算参数，物体保持世界姿态。自定义像素用 `fx()` / `painted()`，底层是 `<canvas>` 和 `<script>`。字号按屏幕上的大小和短边检查，示例都不再整类忽略问题码。离屏画布和字体用 flexlayer 导出的同一份实例；逐字动画用 `splitText()`，字仍由 flexlayer 排版。还需要 flexlayer 配合的改动见 [FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)。
+- 依赖 flexlayer 0.11.0：镜头用 `view` 取景，`shot()` 算参数，结构由调用方写两层 layer；三维镜头用取景层上的 `camera`，`shot3d()` 算参数，物体保持世界姿态。自定义像素用 `fx()` / `painted()`，底层是 `<canvas>` 和 `<script>`。量已经写好的一层用 `layer.create`，旧的 `canvas.create` 已删除。报告里的盒子只有 `x`、`y`、`width`、`height`。字号按屏幕上的大小和短边检查，示例都不再整类忽略问题码。离屏画布和字体用 flexlayer 导出的同一份实例；逐字动画用 `splitText()`，字仍由 flexlayer 排版。还需要 flexlayer 配合的改动见 [FLEXLAYER-CHANGES.md](docs/FLEXLAYER-CHANGES.md)。
 - 音频是按响度报告、频段分析和波形检查的，没有人工试听过。

@@ -2,13 +2,13 @@
  * 镜头、报告、收尾。
  *
  *   镜头  上一段停在正中的“墨”，其实是这一页里的一个字，只是放大了 15 倍。镜头拉远，整页露出来；
- *         说到“这里”时推向另一处。两处位置都是 canvas.create 量出来的：字带着所在 span 的 id。
+ *         说到“这里”时推向另一处。两处位置都是 layer.create 量出来的：字带着所在 span 的 id。
  *         取景窗用 view 取舞台的一块；调色写在取景窗上，盒子和标签画在窗外，用成片像素。
  *   报告  推到“这里”之后，画出这两个字的盒子（蓝）和着墨（红）。接着三行字左对齐，
  *         报告里的数字说明各自的字形离盒子左边多远；说到“着墨”时按着墨对齐。
  *   收尾  三个名字依次出现，一条时间轴把它们串起来，印章盖在线的末端。
  */
-import { canvas, checkLayer, glyph, h, type LayerReport, type PlacedLine } from 'flexlayer'
+import { checkLayer, glyph, h, layer, type LayerReport, type PlacedLine } from 'flexlayer'
 import {
   fade,
   fx,
@@ -57,7 +57,7 @@ function pageNode(hereColor: string) {
   )
 }
 
-const measured = canvas.create(pageNode(C.gold))
+const measured = layer.create(pageNode(C.gold))
 const PX = (W - PAGE_W) / 2
 const PY = H / 2 - measured.height / 2 - 20
 
@@ -223,7 +223,7 @@ const specimen = (sp: (typeof SPECIMENS)[number], x: number) =>
 const REPORT: LayerReport = await checkLayer(h('layer', { width: W, height: H }, ...SPECIMENS.map((sp) => specimen(sp, GUIDE))))
 const MEASURE = SPECIMENS.map((sp) => {
   const e = REPORT.elements.find((x) => x.id === sp.id)!
-  return { box: e.box, ink: e.ink!, inset: e.ink!.left - e.box.left }
+  return { box: e.box, ink: e.ink, inset: e.ink.x - e.box.x }
 })
 
 const T_TABLE = at('report', '报告')
@@ -248,8 +248,8 @@ function reportScene(f: Frame): Child[] {
     return box3(
       on,
       text(SPECIMENS[i]!.id, { fontFamily: LATIN, fontSize: 44, color: C.dim, width: 90 }),
-      text((m.box.left + dx).toFixed(1), { fontFamily: LATIN, fontSize: 44, color: C.blue, width: 200 }),
-      text((m.ink.left + dx).toFixed(1), { fontFamily: LATIN, fontSize: 44, color: red ? C.red : C.paper, width: 200 }),
+      text((m.box.x + dx).toFixed(1), { fontFamily: LATIN, fontSize: 44, color: C.blue, width: 200 }),
+      text((m.ink.x + dx).toFixed(1), { fontFamily: LATIN, fontSize: 44, color: red ? C.red : C.paper, width: 200 }),
     )
   })
   return [
@@ -272,10 +272,10 @@ function reportScene(f: Frame): Child[] {
             ctx.lineWidth = 2
             ctx.setLineDash([10, 8])
             ctx.strokeStyle = rgba(C.blue, outline * boxFade)
-            ctx.strokeRect(m.box.left + dx, m.box.top, m.box.width, m.box.height)
+            ctx.strokeRect(m.box.x + dx, m.box.y, m.box.width, m.box.height)
             ctx.setLineDash([])
             ctx.strokeStyle = rgba(C.red, outline)
-            ctx.strokeRect(m.ink.left + dx, m.ink.top, m.ink.width, m.ink.height)
+            ctx.strokeRect(m.ink.x + dx, m.ink.y, m.ink.width, m.ink.height)
           })
         }),
         ...SPECIMENS.map((sp, i) => specimen(sp, xs[i]!)),

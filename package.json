@@ -42,7 +42,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "flexlayer": "github:ruochi/flexlayer#d9bdeb261d0011ec8855bf1e6e84dcb1f0459ed9",
+    "flexlayer": "github:ruochi/flexlayer#96388ecd67cd283bc471cbaa70cf6416a076af49",
     "tsx": "^4.19.2",
     "visualtone": "github:ruochi/visualtone#cd635b83439a1fa096db5e1c5a5e6336a6a60f63"
   },
